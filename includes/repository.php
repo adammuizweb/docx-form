@@ -4,7 +4,7 @@ declare(strict_types=1);
 function dxf_schema_ready(PDO $pdo): bool
 {
     try {
-        $tables = ['dxf_templates','dxf_template_versions','dxf_submissions','dxf_otp_challenges','dxf_submission_events','dxf_rate_limits'];
+        $tables = ['dxf_templates','dxf_template_versions','dxf_submissions','dxf_otp_challenges','dxf_submission_events','dxf_rate_limits','dxf_import_ledger'];
         $statement = $pdo->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (' . implode(',', array_fill(0, count($tables), '?')) . ')');
         $statement->execute($tables);
         return (int)$statement->fetchColumn() === count($tables);

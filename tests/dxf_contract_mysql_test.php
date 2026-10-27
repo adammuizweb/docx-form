@@ -12,7 +12,9 @@ $pdo = new PDO($dsn, $user, $password, [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTIO
 $foundation = (string)file_get_contents($root . '/migrations/0001-foundation.sql');
 $foreignKey = require $root . '/migrations/0002-current-version-foreign-key.php';
 $verify = require $root . '/migrations/0003-verify-schema.php';
-if (!is_callable($foreignKey) || !is_callable($verify)) throw new RuntimeException('Schema PHP migrations are not callable.');
+$importLedger = (string)file_get_contents($root . '/migrations/0004-template-import-ledger.sql');
+$verifyImport = require $root . '/migrations/0005-verify-import-ledger.php';
+if (!is_callable($foreignKey) || !is_callable($verify) || !is_callable($verifyImport)) throw new RuntimeException('Schema PHP migrations are not callable.');
 
 $createDatabase = static function () use ($pdo, $database): void {
     $pdo->exec('DROP DATABASE IF EXISTS `' . $database . '`');
@@ -22,10 +24,12 @@ $createDatabase = static function () use ($pdo, $database): void {
 $runFoundation = static function () use ($pdo, $foundation): void {
     foreach (preg_split('/;\s*(?:\r?\n|\z)/', $foundation, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) $pdo->exec($statement);
 };
-$runAll = static function () use ($runFoundation, $foreignKey, $verify, $pdo): void {
+$runAll = static function () use ($runFoundation, $foreignKey, $verify, $importLedger, $verifyImport, $pdo): void {
     $runFoundation();
     $foreignKey($pdo);
     $verify($pdo);
+    foreach (preg_split('/;\s*(?:\r?\n|\z)/', $importLedger, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) $pdo->exec($statement);
+    $verifyImport($pdo);
 };
 $mustReject = static function (callable $operation, string $message) use ($verify, $pdo): void {
     $operation();
@@ -86,13 +90,49 @@ try {
     $createDatabase(); $runAll();
     $pdo->exec('CREATE TABLE `settings` (`key` VARCHAR(191) NOT NULL,`value` TEXT DEFAULT NULL,PRIMARY KEY (`key`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
     $pdo->exec("INSERT INTO `settings` (`key`,`value`) VALUES ('dxf_rate_max_requests','10')");
+    if (!defined('DXF_PERMISSION_TEMPLATES')) define('DXF_PERMISSION_TEMPLATES', 'plugin.docx-form.templates.manage');
+    if (!function_exists('authorization_lock_actor_permissions')) { function authorization_lock_actor_permissions(PDO $pdo, int $actorId): bool { return $actorId === 1 && $pdo->inTransaction(); } }
+    if (!function_exists('user_can')) { function user_can(PDO $pdo, int $actorId, string $permission): bool { return $actorId === 1 && $permission === DXF_PERMISSION_TEMPLATES; } }
+    if (!function_exists('audit_log_record')) { function audit_log_record(PDO $pdo, array $record): void { $GLOBALS['dxf_contract_audits'][] = $record; } }
     require_once $root . '/includes/repository.php';
     require_once $root . '/includes/storage.php';
+    require_once $root . '/includes/docx.php';
+    require_once $root . '/includes/integrations.php';
+    require_once $root . '/includes/import.php';
     require_once $root . '/includes/lifecycle.php';
     $storageBase = sys_get_temp_dir() . '/dxf-contract-life-' . bin2hex(random_bytes(5));
     if (!mkdir($storageBase . '/plugins/docx-form', 0700, true)) throw new RuntimeException('Unable to create contract storage root.');
     $GLOBALS['dxf_storage_root_override'] = $storageBase . '/plugins/docx-form';
     $GLOBALS['pdo'] = $pdo;
+    $sourceDirectory = $storageBase . '/sources';
+    mkdir($sourceDirectory, 0700);
+    $sourceDocx = $sourceDirectory . '/template.docx';
+    $zip = new ZipArchive();
+    if ($zip->open($sourceDocx, ZipArchive::CREATE | ZipArchive::EXCL) !== true) throw new RuntimeException('Unable to create contract import DOCX.');
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+    $zip->addFromString('_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="r1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+    $zip->addFromString('word/document.xml', '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{person.name}}</w:t></w:r></w:p></w:body></w:document>');
+    $zip->close();
+    $sourcePdf = $sourceDirectory . '/source.pdf';
+    file_put_contents($sourcePdf, "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\nstartxref\n0\n%%EOF\n");
+    $importDescriptor = dxf_descriptor_validate(['schema'=>'docx-form/v1','document_filename'=>'result.docx','fields'=>[['key'=>'person.name','label'=>'Name','type'=>'text','required'=>true,'max_length'=>100,'token'=>'{{person.name}}','identity'=>'name']],'print'=>[]]);
+    $importPackage = ['namespace'=>'contract.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[array_merge([
+        'definition_id'=>'example','title'=>'Example form','slug'=>'example-form','description'=>'Managed import contract.',
+        'status'=>'published','identity_mode'=>'self_declared','descriptor'=>$importDescriptor,'descriptor_sha256'=>hash('sha256', dxf_descriptor_json($importDescriptor)),
+        'docx_path'=>$sourceDocx,'docx_sha256'=>hash_file('sha256', $sourceDocx),'docx_size'=>filesize($sourceDocx),
+        'source_pdf_path'=>$sourcePdf,'source_pdf_sha256'=>hash_file('sha256', $sourcePdf),'source_pdf_size'=>filesize($sourcePdf),
+    ], ['allow_source_view'=>false,'allow_source_download'=>true,'allow_docx_download'=>true,'allow_print'=>false,'allow_pdf'=>false])]];
+    $dryRun = dxf_import_templates($pdo, $importPackage);
+    if (($dryRun['changes'] ?? null) !== 1 || ($dryRun['actions']['example']['action'] ?? null) !== 'create') throw new RuntimeException('Managed import dry run did not plan an initial create.');
+    $applied = dxf_import_templates($pdo, $importPackage, 1, true);
+    if (($applied['changes'] ?? null) !== 0 || ($applied['actions']['example']['action'] ?? null) !== 'current'
+        || (int)$pdo->query('SELECT COUNT(*) FROM dxf_templates')->fetchColumn() !== 1
+        || (int)$pdo->query('SELECT COUNT(*) FROM dxf_import_ledger')->fetchColumn() !== 1
+        || count($GLOBALS['dxf_contract_audits'] ?? []) !== 1) throw new RuntimeException('Managed import did not apply and converge exactly once.');
+    $pdo->exec("UPDATE dxf_templates SET title='Operator edit' WHERE slug='example-form'");
+    try { dxf_import_templates($pdo, $importPackage); throw new RuntimeException('Managed import accepted operator drift.'); }
+    catch (DomainException) {}
+    unlink($sourceDocx); unlink($sourcePdf); rmdir($sourceDirectory);
     dxf_uninstall('docx-form');
     dxf_uninstall('docx-form');
     $tableCount = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'dxf\\_%'")->fetchColumn();

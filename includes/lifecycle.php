@@ -37,7 +37,7 @@ function dxf_uninstall(string $name): void
     $foreignKey = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='dxf_templates' AND CONSTRAINT_NAME='dxf_template_current_version_fk' AND CONSTRAINT_TYPE='FOREIGN KEY'");
     $foreignKey->execute();
     if ((int)$foreignKey->fetchColumn() === 1) $pdo->exec('ALTER TABLE `dxf_templates` DROP FOREIGN KEY `dxf_template_current_version_fk`');
-    foreach (['dxf_submission_events','dxf_rate_limits','dxf_otp_challenges','dxf_submissions','dxf_template_versions','dxf_templates'] as $table) $pdo->exec('DROP TABLE IF EXISTS `' . $table . '`');
+    foreach (['dxf_import_ledger','dxf_submission_events','dxf_rate_limits','dxf_otp_challenges','dxf_submissions','dxf_template_versions','dxf_templates'] as $table) $pdo->exec('DROP TABLE IF EXISTS `' . $table . '`');
     $keys = array_map(static fn(string $name): string => 'dxf_'.$name, array_keys(dxf_settings_defaults()));
     $pdo->prepare('DELETE FROM settings WHERE `key` IN (' . implode(',', array_fill(0, count($keys), '?')) . ')')->execute($keys);
     dxf_remove_storage_tree(dxf_storage_root());

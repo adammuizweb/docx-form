@@ -2,7 +2,7 @@
 
 DOCX Form is a generic Jyavani CMS plugin for collecting structured values,
 reviewing submissions, and producing approved documents from validated DOCX
-templates. Version `0.1.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
+templates. Version `0.2.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
 `10.6+` or MySQL `8.0.16+`, and the PHP extensions declared in `plugin.json`.
 
 ## Workflow
@@ -118,14 +118,26 @@ Migrations are append-only and retry-safe after MySQL/MariaDB partial DDL:
 `0001-foundation.sql` creates tables, `0002-current-version-foreign-key.php`
 idempotently installs the circular current-version foreign key, and
 `0003-verify-schema.php` fails closed on incompatible columns, indexes, checks,
-JSON validity constraints, or owned foreign keys. No request path performs DDL.
+JSON validity constraints, or owned foreign keys. `0004-template-import-ledger.sql`
+adds generic managed-import ownership, and `0005-verify-import-ledger.php`
+verifies that extension. No request path performs DDL.
+
+## Managed Imports
+
+Trusted deployment tooling may call `dxf_import_templates()` with a versioned,
+fully hash-bound package. The API validates every descriptor and source file,
+plans without mutation by default, and applies under a namespace advisory lock,
+transaction-time permission check, immutable revisions, Core audit, and a
+plugin-owned ledger. It never adopts an existing unmanaged slug or overwrites
+operator changes. Imported inline PDF viewing remains disabled because offline
+validation cannot stand in for the runtime trusted sanitizer callback.
 
 ## Development
 
 ```sh
 for file in $(git ls-files '*.php'); do php -l "$file"; done
 for test in tests/*.php; do php "$test"; done
-php tools/build-package.php /tmp/docx-form-0.1.0.zip
+php tools/build-package.php /tmp/docx-form-0.2.0.zip
 ```
 
 No Composer or runtime framework is required.

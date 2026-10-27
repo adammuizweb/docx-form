@@ -4,19 +4,20 @@ declare(strict_types=1);
 $root = realpath(dirname(__DIR__));
 if ($root === false) throw new RuntimeException('Plugin root is unavailable.');
 $manifest = json_decode((string)file_get_contents($root . '/plugin.json'), true, 32, JSON_THROW_ON_ERROR);
-if (($manifest['name'] ?? null) !== 'docx-form' || ($manifest['version'] ?? null) !== '0.1.0') throw new RuntimeException('Unexpected plugin identity.');
+if (($manifest['name'] ?? null) !== 'docx-form' || ($manifest['version'] ?? null) !== '0.2.0') throw new RuntimeException('Unexpected plugin identity.');
 
 $allowed = [
     'CHANGELOG.md','LICENSE','README.md','icon.svg','plugin.json','plugin.php',
     'admin/common.php','admin/index.php','admin/audit/index.php','admin/settings/index.php','admin/settings/save.php',
     'admin/submissions/review.php','admin/submissions/view.php','admin/templates/edit.php','admin/templates/save.php',
     'assets/css/admin.css','assets/css/frontend.css','assets/css/widget.css','assets/js/preview.js','assets/js/print.js',
-    'includes/descriptor.php','includes/docx.php','includes/integrations.php','includes/lifecycle.php',
+    'includes/descriptor.php','includes/docx.php','includes/import.php','includes/integrations.php','includes/lifecycle.php',
     'includes/public.php','includes/repository.php','includes/storage.php','includes/validation.php',
     'languages/de.php','languages/id.php','migrations/0001-foundation.sql','migrations/0002-current-version-foreign-key.php','migrations/0003-verify-schema.php',
+    'migrations/0004-template-import-ledger.sql','migrations/0005-verify-import-ledger.php',
 ];
 sort($allowed, SORT_STRING);
-$output = $argv[1] ?? dirname($root) . '/docx-form-0.1.0.zip';
+$output = $argv[1] ?? dirname($root) . '/docx-form-0.2.0.zip';
 $directory = realpath(dirname($output));
 if ($directory === false || !is_writable($directory)) throw new RuntimeException('Package output directory is unavailable.');
 $output = $directory . DIRECTORY_SEPARATOR . basename($output);
@@ -45,7 +46,7 @@ try {
     $embedded = json_decode((string)$verify->getFromName('plugin.json'), true, 32, JSON_THROW_ON_ERROR);
     $verify->close();
     sort($entries, SORT_STRING);
-    if ($entries !== $allowed || ($embedded['name'] ?? null) !== 'docx-form' || ($embedded['version'] ?? null) !== '0.1.0' || $entries[0] === 'docx-form/plugin.json') throw new RuntimeException('Package contract verification failed.');
+    if ($entries !== $allowed || ($embedded['name'] ?? null) !== 'docx-form' || ($embedded['version'] ?? null) !== '0.2.0' || $entries[0] === 'docx-form/plugin.json') throw new RuntimeException('Package contract verification failed.');
     if (!rename($stage, $output)) throw new RuntimeException('Unable to publish package atomically.');
     echo json_encode(['path'=>$output,'entries'=>count($entries),'bytes'=>filesize($output),'sha256'=>hash_file('sha256',$output)], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $error) {

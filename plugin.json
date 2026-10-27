@@ -1,6 +1,6 @@
 {
   "name": "docx-form",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "title": "DOCX Form",
   "description": "Publish structured document forms, review submissions, and generate approved DOCX output safely.",
   "icon": "icon.svg",

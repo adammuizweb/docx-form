@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 if (!defined('BACKEND_PATH')) return;
 
-const DXF_VERSION = '0.1.0';
+const DXF_VERSION = '0.2.0';
+const DXF_IMPORT_API_VERSION = 1;
 const DXF_PERMISSION_READ = 'plugin.docx-form.workspace.read';
 const DXF_PERMISSION_TEMPLATES = 'plugin.docx-form.templates.manage';
 const DXF_PERMISSION_REVIEW = 'plugin.docx-form.submissions.review';
@@ -23,6 +24,7 @@ require_once __DIR__ . '/includes/storage.php';
 require_once __DIR__ . '/includes/docx.php';
 require_once __DIR__ . '/includes/repository.php';
 require_once __DIR__ . '/includes/integrations.php';
+require_once __DIR__ . '/includes/import.php';
 require_once __DIR__ . '/includes/public.php';
 require_once __DIR__ . '/includes/lifecycle.php';
 
