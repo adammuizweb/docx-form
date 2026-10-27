@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">DOCX Form</title>
+  <rect width="512" height="512" rx="112" fill="#163f34"/>
+  <path d="M150 92h150l78 78v250H150z" fill="#f4f0df"/>
+  <path d="M300 92v78h78" fill="#c8dfd4"/>
+  <path d="M196 228h136M196 278h136M196 328h78" fill="none" stroke="#176b52" stroke-width="24" stroke-linecap="round"/>
+  <path d="m295 346 24 24 48-58" fill="none" stroke="#d88935" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

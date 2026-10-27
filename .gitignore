@@ -1,0 +1,9 @@
+/.idea/
+/.vscode/
+/.phpunit.cache/
+/.DS_Store
+/*.zip
+/.notes/
+*.local.md
+*.private.md
+private_files/

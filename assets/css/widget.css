@@ -1,0 +1,2 @@
+.dxf-widget{--dxf-widget-ink:#14221d;--dxf-widget-muted:#5f6f67;--dxf-widget-line:#d7dfda;--dxf-widget-accent:#176b52;display:grid;gap:.75rem;box-sizing:border-box;max-width:42rem;margin:1rem 0;padding:1.25rem;border:1px solid var(--dxf-widget-line);border-radius:1rem;background:#fbfcf8;color:var(--dxf-widget-ink)}
+.dxf-widget strong{font:700 1.25rem/1.25 Georgia,serif}.dxf-widget p{margin:0;color:var(--dxf-widget-muted)}.dxf-widget a{justify-self:start;color:var(--dxf-widget-accent);font-weight:700;text-decoration-thickness:.1em;text-underline-offset:.18em}

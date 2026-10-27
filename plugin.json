@@ -1,0 +1,55 @@
+{
+  "name": "docx-form",
+  "version": "0.1.0",
+  "title": "DOCX Form",
+  "description": "Publish structured document forms, review submissions, and generate approved DOCX output safely.",
+  "icon": "icon.svg",
+  "author": "Adam Muiz",
+  "author_uri": "https://jyavani.com/member/adammuiz/",
+  "plugin_uri": "https://jyavani.com/plugin/docx-form/",
+  "homepage": "https://github.com/adammuizweb/docx-form",
+  "github_url": "https://github.com/adammuizweb/docx-form",
+  "license": "MIT",
+  "store": {
+    "url": "https://jyavani.com/plugin-store",
+    "slug": "docx-form"
+  },
+  "requires": {
+    "jyavani": ">=2.3.187",
+    "php": ">=8.1",
+    "extensions": ["pdo", "pdo_mysql", "json", "mbstring", "zip", "dom", "libxml", "fileinfo"],
+    "plugins": {}
+  },
+  "permissions": [
+    {"key":"plugin.docx-form.workspace.read","label":"View DOCX Form Workspace","supports_scope":false,"default_roles":["admin","editor"],"delegable":true},
+    {"key":"plugin.docx-form.templates.manage","label":"Manage DOCX Form Templates","supports_scope":false,"default_roles":["admin"],"delegable":false},
+    {"key":"plugin.docx-form.submissions.review","label":"Review DOCX Form Submissions","supports_scope":false,"default_roles":["admin","editor"],"delegable":true},
+    {"key":"plugin.docx-form.audit.view","label":"View DOCX Form Audit Trail","supports_scope":false,"default_roles":["admin"],"delegable":true},
+    {"key":"plugin.docx-form.settings.manage","label":"Manage DOCX Form Settings","supports_scope":false,"default_roles":["admin"],"delegable":false}
+  ],
+  "admin": {
+    "pages": [
+      {"route":"admin/tools/docx-form","file":"admin/index.php","title":"DOCX Form","roles":["admin","editor"],"permission":"plugin.docx-form.workspace.read"},
+      {"route":"admin/tools/docx-form/templates/edit","file":"admin/templates/edit.php","title":"Edit Document Form","hidden":true,"roles":["admin"],"permission":"plugin.docx-form.templates.manage"},
+      {"route":"admin/tools/docx-form/templates/save","file":"admin/templates/save.php","title":"Save Document Form","hidden":true,"roles":["admin"],"permission":"plugin.docx-form.templates.manage"},
+      {"route":"admin/tools/docx-form/submissions/view","file":"admin/submissions/view.php","title":"Document Form Submission","hidden":true,"roles":["admin","editor"],"permission":"plugin.docx-form.submissions.review"},
+      {"route":"admin/tools/docx-form/submissions/review","file":"admin/submissions/review.php","title":"Review Document Form Submission","hidden":true,"roles":["admin","editor"],"permission":"plugin.docx-form.submissions.review"},
+      {"route":"admin/tools/docx-form/audit","file":"admin/audit/index.php","title":"DOCX Form Audit","hidden":true,"roles":["admin"],"permission":"plugin.docx-form.audit.view"},
+      {"route":"admin/tools/docx-form/settings","file":"admin/settings/index.php","title":"DOCX Form Settings","hidden":true,"roles":["admin"],"permission":"plugin.docx-form.settings.manage"},
+      {"route":"admin/tools/docx-form/settings/save","file":"admin/settings/save.php","title":"Save DOCX Form Settings","hidden":true,"roles":["admin"],"permission":"plugin.docx-form.settings.manage"}
+    ],
+    "nav": [
+      {"label":"DOCX Form","icon":"file-text","page":"admin/tools/docx-form","parent":"tools","roles":["admin","editor"]}
+    ]
+  },
+  "static": {
+    "copy": [
+      {"from":"assets/css/frontend.css","to":"static/plugins/docx-form/frontend.css"},
+      {"from":"assets/css/widget.css","to":"static/plugins/docx-form/widget.css"},
+      {"from":"assets/css/admin.css","to":"static/plugins/docx-form/admin.css"},
+      {"from":"assets/js/preview.js","to":"static/plugins/docx-form/preview.js"},
+      {"from":"assets/js/print.js","to":"static/plugins/docx-form/print.js"}
+    ]
+  },
+  "assets": {"css":[],"js":[]}
+}
