@@ -2,7 +2,7 @@
 
 DOCX Form is a generic Jyavani CMS plugin for collecting structured values and
 producing reviewed or immediate documents from validated DOCX templates.
-Version `0.4.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
+Version `0.4.1` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
 `10.6+` or MySQL `8.0.16+`, and the PHP extensions declared in `plugin.json`.
 
 ## Workflow
@@ -153,7 +153,7 @@ validation cannot stand in for the runtime trusted sanitizer callback.
 ```sh
 for file in $(git ls-files '*.php'); do php -l "$file"; done
 for test in tests/*.php; do php "$test"; done
-php tools/build-package.php /tmp/opencode/docx-form-0.4.0.zip
+php tools/build-package.php /tmp/opencode/docx-form-0.4.1.zip
 ```
 
 No Composer or runtime framework is required.

@@ -1,1 +1,140 @@
-.dxf-admin{--dxf-green:#145c47;--dxf-ink:#17221e;--dxf-line:#dce3df;color:var(--dxf-ink);max-width:1320px;margin:0 auto}.dxf-admin-nav{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1.25rem}.dxf-admin-nav a{padding:.55rem .85rem;border-radius:999px;text-decoration:none}.dxf-admin-nav a[aria-current=page]{background:var(--dxf-green);color:#fff}.dxf-admin-head{display:flex;justify-content:space-between;align-items:end;gap:1rem;padding:1.5rem;margin-bottom:1rem;border-radius:1rem;background:linear-gradient(135deg,#e7f1ec,#f7f1df)}.dxf-admin-head span{text-transform:uppercase;letter-spacing:.12em;font-size:.72rem;font-weight:800;color:var(--dxf-green)}.dxf-admin-head h1{font:700 clamp(2rem,4vw,3.4rem)/1 Georgia,serif;margin:.35rem 0}.dxf-admin-head p{margin:.5rem 0 0}.dxf-admin-card{background:#fff;border:1px solid var(--dxf-line);border-radius:1rem;padding:1.25rem;margin-bottom:1rem}.dxf-admin-card>h2{margin-top:0}.dxf-admin-table{overflow:auto}.dxf-admin-table td small{display:block;color:#66736d}.dxf-editor{display:grid;gap:1rem}.dxf-editor label,.dxf-admin-grid label{display:grid;gap:.4rem;font-weight:700}.dxf-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}.dxf-preview-setting{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:0 0 1.25rem;padding:1rem;border:1px solid var(--dxf-line);border-radius:.75rem}.dxf-preview-setting legend{padding:0 .35rem;font-weight:800}.dxf-preview-setting label{display:flex;gap:.65rem;padding:.85rem;border:1px solid var(--dxf-line);border-radius:.65rem;background:#f8faf9}.dxf-preview-setting label:has(input:checked){border-color:var(--dxf-green);background:#edf6f2}.dxf-preview-setting input{margin-top:.2rem}.dxf-preview-setting span{display:grid;gap:.25rem}.dxf-preview-setting small,.dxf-preview-setting p{color:#66736d}.dxf-preview-setting p{grid-column:1/-1;margin:0}.dxf-code{font:13px/1.45 ui-monospace,monospace;tab-size:2}.dxf-toggle{display:inline-flex!important;margin-right:1rem}.dxf-capability{padding:.75rem;background:#f4f6f5;border-radius:.5rem}.dxf-review-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.6fr);gap:1rem}.dxf-review-grid dl div{border-top:1px solid var(--dxf-line);padding:.65rem 0}.dxf-review-grid dt{font-weight:700}.dxf-review-grid dd{margin:.2rem 0;white-space:pre-wrap}.dxf-actions{display:flex;gap:.5rem;margin-top:1rem}.dxf-danger{background:#9b2c2c!important}.dxf-events{padding-left:1.25rem}.dxf-events li{margin:.6rem 0}.dxf-events span{display:block;color:#66736d;font-size:.85rem}@media(max-width:800px){.dxf-review-grid{grid-template-columns:1fr}.dxf-admin-head{align-items:start;flex-direction:column}.dxf-preview-setting{grid-template-columns:1fr}}
+.dxf-admin {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  color: var(--adam-text);
+}
+
+.dxf-admin *,
+.dxf-admin *::before,
+.dxf-admin *::after { box-sizing: border-box; }
+
+.dxf-admin-nav {
+  display: flex;
+  gap: .25rem;
+  max-width: 100%;
+  margin-bottom: 1.25rem;
+  padding: .3rem;
+  overflow-x: auto;
+  border: 1px solid var(--adam-border);
+  border-radius: var(--adam-radius-lg);
+  background: var(--adam-card);
+}
+
+.dxf-admin-nav a {
+  padding: .5rem .75rem;
+  border-radius: var(--adam-radius);
+  color: var(--adam-text-2);
+  font-size: .85rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dxf-admin-nav a:hover { background: var(--adam-hover); color: var(--adam-link-hover); }
+.dxf-admin-nav a[aria-current="page"] { background: var(--adam-primary-soft); color: var(--adam-primary); }
+
+.dxf-admin-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--adam-border);
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--adam-primary-soft), var(--adam-surface-2));
+}
+
+.dxf-admin-head span {
+  color: var(--adam-primary);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.dxf-admin-head h1 { margin: .35rem 0; color: var(--adam-text); font: 700 clamp(2rem,4vw,3.4rem)/1 Georgia,serif; }
+.dxf-admin-head p { margin: .5rem 0 0; color: var(--adam-text-3); }
+
+.dxf-admin .adam-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--adam-on-primary);
+  text-decoration: none;
+}
+
+.dxf-admin .adam-btn:hover,
+.dxf-admin .adam-btn:focus,
+.dxf-admin .adam-btn:focus-visible { color: var(--adam-on-primary); text-decoration: none; }
+.dxf-admin .adam-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--adam-focus); }
+
+.dxf-admin-card {
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--adam-border);
+  border-radius: 1rem;
+  background: var(--adam-card);
+  box-shadow: var(--adam-shadow);
+}
+
+.dxf-admin-card > h2 { margin-top: 0; color: var(--adam-text); }
+.dxf-admin-card fieldset { border-color: var(--adam-border); }
+.dxf-admin-card legend { color: var(--adam-text-2); }
+.dxf-admin-table { width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; }
+.dxf-admin-table .adam-table { min-width: 680px; box-shadow: none; }
+.dxf-admin-table td small { display: block; color: var(--adam-muted); }
+.dxf-empty { padding: 2.5rem 1rem !important; color: var(--adam-muted) !important; text-align: center; }
+
+.dxf-editor { display: grid; gap: 1rem; }
+.dxf-editor label,
+.dxf-admin-grid label { display: grid; gap: .4rem; color: var(--adam-text-2); font-weight: 700; }
+.dxf-editor small,
+.dxf-admin-grid small { color: var(--adam-muted); font-weight: 400; }
+.dxf-admin-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 1rem; }
+
+.dxf-preview-setting {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .75rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--adam-border);
+  border-radius: .75rem;
+}
+
+.dxf-preview-setting legend { padding: 0 .35rem; font-weight: 800; }
+.dxf-preview-setting label { display: flex; gap: .65rem; padding: .85rem; border: 1px solid var(--adam-border); border-radius: .65rem; background: var(--adam-surface-2); }
+.dxf-preview-setting label:has(input:checked) { border-color: var(--adam-primary); background: var(--adam-primary-soft); }
+.dxf-preview-setting input { margin-top: .2rem; accent-color: var(--adam-primary); }
+.dxf-preview-setting span { display: grid; gap: .25rem; }
+.dxf-preview-setting small,
+.dxf-preview-setting p { color: var(--adam-muted); }
+.dxf-preview-setting p { grid-column: 1/-1; margin: 0; }
+
+.dxf-code { font: 13px/1.45 ui-monospace,monospace; tab-size: 2; }
+.dxf-toggle { display: inline-flex !important; margin-right: 1rem; color: var(--adam-text-2); }
+.dxf-toggle input { accent-color: var(--adam-primary); }
+.dxf-capability { padding: .75rem; border-radius: .5rem; background: var(--adam-surface-3); color: var(--adam-text-3); }
+.dxf-review-grid { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(300px,.6fr); gap: 1rem; }
+.dxf-review-grid dl div { padding: .65rem 0; border-top: 1px solid var(--adam-border); }
+.dxf-review-grid dt { color: var(--adam-text-2); font-weight: 700; }
+.dxf-review-grid dd { margin: .2rem 0; white-space: pre-wrap; }
+.dxf-actions { display: flex; gap: .5rem; margin-top: 1rem; }
+.dxf-admin .dxf-danger { background: var(--adam-danger) !important; color: var(--adam-on-primary) !important; }
+.dxf-admin .dxf-danger:hover { background: var(--adam-danger-600) !important; }
+.dxf-events { padding-left: 1.25rem; }
+.dxf-events li { margin: .6rem 0; }
+.dxf-events span { display: block; color: var(--adam-muted); font-size: .85rem; }
+
+.dxf-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .55rem; color: var(--adam-muted); font-size: .85rem; }
+.dxf-pagination a { padding: .4rem .65rem; border: 1px solid var(--adam-border-2); border-radius: var(--adam-radius); color: var(--adam-text-2); text-decoration: none; }
+.dxf-pagination a:hover { background: var(--adam-hover); color: var(--adam-link-hover); }
+.dxf-pagination a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--adam-focus); }
+
+@media (max-width:800px) {
+  .dxf-review-grid { grid-template-columns: 1fr; }
+  .dxf-admin-head { align-items: flex-start; flex-direction: column; }
+  .dxf-preview-setting { grid-template-columns: 1fr; }
+}

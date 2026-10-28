@@ -4,7 +4,7 @@ declare(strict_types=1);
 $root = realpath(dirname(__DIR__));
 if ($root === false) throw new RuntimeException('Plugin root is unavailable.');
 $manifest = json_decode((string)file_get_contents($root . '/plugin.json'), true, 32, JSON_THROW_ON_ERROR);
-if (($manifest['name'] ?? null) !== 'docx-form' || ($manifest['version'] ?? null) !== '0.4.0') throw new RuntimeException('Unexpected plugin identity.');
+if (($manifest['name'] ?? null) !== 'docx-form' || ($manifest['version'] ?? null) !== '0.4.1') throw new RuntimeException('Unexpected plugin identity.');
 
 $allowed = [
     'CHANGELOG.md','LICENSE','README.md','icon.svg','plugin.json','plugin.php',
@@ -19,7 +19,7 @@ $allowed = [
     'migrations/0007-verify-workflow-schema.php',
 ];
 sort($allowed, SORT_STRING);
-$output = $argv[1] ?? dirname($root) . '/docx-form-0.4.0.zip';
+$output = $argv[1] ?? dirname($root) . '/docx-form-0.4.1.zip';
 $directory = realpath(dirname($output));
 if ($directory === false || !is_writable($directory)) throw new RuntimeException('Package output directory is unavailable.');
 $output = $directory . DIRECTORY_SEPARATOR . basename($output);
@@ -48,7 +48,7 @@ try {
     $embedded = json_decode((string)$verify->getFromName('plugin.json'), true, 32, JSON_THROW_ON_ERROR);
     $verify->close();
     sort($entries, SORT_STRING);
-    if ($entries !== $allowed || ($embedded['name'] ?? null) !== 'docx-form' || ($embedded['version'] ?? null) !== '0.4.0' || $entries[0] === 'docx-form/plugin.json') throw new RuntimeException('Package contract verification failed.');
+    if ($entries !== $allowed || ($embedded['name'] ?? null) !== 'docx-form' || ($embedded['version'] ?? null) !== '0.4.1' || $entries[0] === 'docx-form/plugin.json') throw new RuntimeException('Package contract verification failed.');
     if (!rename($stage, $output)) throw new RuntimeException('Unable to publish package atomically.');
     echo json_encode(['path'=>$output,'entries'=>count($entries),'bytes'=>filesize($output),'sha256'=>hash_file('sha256',$output)], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 } catch (Throwable $error) {

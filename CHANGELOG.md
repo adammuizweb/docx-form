@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 - 2026-10-28
+
+- Fixed the nested audit route and added bounded server-side event pagination.
+- Aligned the admin workspace with Core light/dark tokens and corrected linked
+  button hover, focus, text-color, and underline states.
+
 ## 0.4.0 - 2026-10-28
 
 - Added a dashboard preview-mode toggle and ephemeral rendered-DOCX previews
