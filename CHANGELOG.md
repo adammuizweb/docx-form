@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3 - 2026-10-28
+
+- Rebalanced long public forms into a clean responsive two-column workspace and
+  removed the browser's nested fieldset chrome.
+- Fit rendered DOCX pages to narrow preview surfaces while preserving the
+  document spacing required by full-page letterhead artwork.
+
 ## 0.4.2 - 2026-10-28
 
 - Allowed Site Owners to delegate every DOCX Form permission to dedicated

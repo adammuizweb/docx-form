@@ -180,7 +180,7 @@ function dxf_public_form(PDO $pdo, array $template): never
         $required = $field['required'] ? ' required' : '';
         $helpId = $field['help'] !== '' ? $id . '-help' : '';
         $described = $helpId !== '' ? ' aria-describedby="' . $helpId . '"' : '';
-        $html .= '<div class="dxf-field" data-preview-field data-preview-label="' . dxf_h($field['label']) . '"><input type="hidden" name="fields[' . $index . '][key]" value="' . dxf_h($field['key']) . '">';
+        $html .= '<div class="dxf-field dxf-field--' . dxf_h($field['type']) . '" data-preview-field data-preview-label="' . dxf_h($field['label']) . '"><input type="hidden" name="fields[' . $index . '][key]" value="' . dxf_h($field['key']) . '">';
         if ($field['type'] === 'checkbox') {
             $html .= '<label class="dxf-check"><input id="' . $id . '" type="checkbox" name="fields[' . $index . '][value]" value="1"' . $required . $described . '> <span>' . dxf_h($field['label']) . '</span></label>';
         } elseif (in_array($field['type'], ['select', 'radio'], true)) {
