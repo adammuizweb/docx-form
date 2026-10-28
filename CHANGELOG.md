@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 - 2026-10-28
+
+- Expanded the public form workspace into a responsive one-quarter form and
+  three-quarter live document preview, with descriptor-driven columns and a
+  mobile single-column fallback.
+
 ## 0.3.0 - 2026-10-28
 
 - Added immutable per-revision operator-review and immediate-DOCX workflows,
