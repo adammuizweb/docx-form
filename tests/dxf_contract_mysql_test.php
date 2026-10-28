@@ -150,6 +150,18 @@ try {
         || (int)$pdo->query('SELECT COUNT(*) FROM dxf_import_ledger')->fetchColumn() !== 1
         || count($GLOBALS['dxf_contract_audits'] ?? []) !== 1
         || $pdo->query("SELECT workflow_mode FROM dxf_template_versions LIMIT 1")->fetchColumn() !== 'operator_review') throw new RuntimeException('Managed import did not apply and converge exactly once.');
+    $nextPackage = $importPackage;
+    $nextPackage['release'] = 'v2';
+    $nextPackage['predecessor_release'] = 'v1';
+    $advancePlan = dxf_import_templates($pdo, $nextPackage);
+    if (($advancePlan['changes'] ?? null) !== 1 || ($advancePlan['actions']['example']['action'] ?? null) !== 'advance') throw new RuntimeException('Unchanged managed definitions did not plan a ledger-only release advance.');
+    $versionsBeforeAdvance = (int)$pdo->query('SELECT COUNT(*) FROM dxf_template_versions')->fetchColumn();
+    $advanced = dxf_import_templates($pdo, $nextPackage, 1, true);
+    if (($advanced['changes'] ?? null) !== 0 || ($advanced['actions']['example']['action'] ?? null) !== 'current'
+        || (int)$pdo->query('SELECT COUNT(*) FROM dxf_template_versions')->fetchColumn() !== $versionsBeforeAdvance
+        || $pdo->query("SELECT release_id FROM dxf_import_ledger WHERE definition_id='example'")->fetchColumn() !== 'v2'
+        || count($GLOBALS['dxf_contract_audits'] ?? []) !== 2) throw new RuntimeException('Ledger-only release advancement did not converge without a duplicate template revision.');
+    $importPackage = $nextPackage;
     $legacyProjection = dxf_import_legacy_projection_hash(dxf_import_projection(dxf_import_prepare_package($importPackage)['templates'][0]));
     $pdo->prepare('UPDATE dxf_import_ledger SET projection_sha256=?')->execute([$legacyProjection]);
     $legacyPlan = dxf_import_templates($pdo, $importPackage);

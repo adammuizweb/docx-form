@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 if (!defined('BACKEND_PATH')) return;
 
-const DXF_VERSION = '0.4.1';
+const DXF_VERSION = '0.4.2';
 const DXF_IMPORT_API_VERSION = 1;
 const DXF_PERMISSION_READ = 'plugin.docx-form.workspace.read';
 const DXF_PERMISSION_TEMPLATES = 'plugin.docx-form.templates.manage';

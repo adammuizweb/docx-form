@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 - 2026-10-28
+
+- Allowed Site Owners to delegate every DOCX Form permission to dedicated
+  least-privilege custom roles without granting general site administration.
+- Advanced unchanged managed-import definitions between package releases
+  without creating duplicate immutable template revisions or storage copies.
+
 ## 0.4.1 - 2026-10-28
 
 - Fixed the nested audit route and added bounded server-side event pagination.

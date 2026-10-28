@@ -183,7 +183,10 @@ function dxf_import_plan_prepared(PDO $pdo, array $package, bool $lock = false):
             $action = 'current';
         } else {
             if ($package['predecessor_release'] === null || !hash_equals((string)$managed['release_id'], $package['predecessor_release'])) throw new DomainException('A DOCX Form import predecessor does not match managed state: ' . $definition['definition_id']);
-            $action = 'update';
+            $legacyDefinitionProjection = dxf_import_legacy_projection_hash(dxf_import_projection($definition));
+            $projectionIsCurrent = hash_equals((string)$managed['projection_sha256'], $definition['projection_sha256'])
+                || ($definition['workflow_mode'] === 'operator_review' && hash_equals((string)$managed['projection_sha256'], $legacyDefinitionProjection));
+            $action = $projectionIsCurrent ? 'advance' : 'update';
         }
         $actions[$definition['definition_id']] = ['action'=>$action,'template_id'=>$templateId,'template_version_id'=>$versionId];
     }
@@ -207,7 +210,7 @@ function dxf_import_templates(PDO $pdo, array $package, int $actorId = 0, bool $
     try {
         $plan = dxf_import_plan_prepared($pdo, $prepared);
         foreach ($prepared['templates'] as $definition) {
-            if (($plan['actions'][$definition['definition_id']]['action'] ?? 'current') === 'current') continue;
+            if (!in_array(($plan['actions'][$definition['definition_id']]['action'] ?? 'current'), ['create', 'update'], true)) continue;
             $docxStage = dxf_stage_file($definition['docx']['path'], 'docx');
             $stages[$definition['definition_id']]['docx'] = $docxStage;
             if ($definition['source_pdf'] !== null) $stages[$definition['definition_id']]['pdf'] = dxf_stage_file($definition['source_pdf']['path'], 'pdf');
@@ -220,6 +223,13 @@ function dxf_import_templates(PDO $pdo, array $package, int $actorId = 0, bool $
         foreach ($prepared['templates'] as $definition) {
             $item = $plan['actions'][$definition['definition_id']];
             if ($item['action'] === 'current') continue;
+            if ($item['action'] === 'advance') {
+                $advance = $pdo->prepare('UPDATE dxf_import_ledger SET release_id=?, updated_by=?, updated_at_utc=? WHERE namespace_id=? AND definition_id=? AND release_id=?');
+                $advance->execute([$prepared['release'],$actorId,$now,$prepared['namespace'],$definition['definition_id'],$prepared['predecessor_release']]);
+                if ($advance->rowCount() !== 1) throw new RuntimeException('DOCX Form import release advancement changed concurrently.');
+                dxf_core_audit($pdo,$actorId,'template.import_release_advanced','docx-form-template',(int)$item['template_id'],$definition['title'],[],['namespace'=>$prepared['namespace'],'definition_id'=>$definition['definition_id'],'release_id'=>$prepared['release'],'projection_sha256'=>$definition['projection_sha256']]);
+                continue;
+            }
             $docx = dxf_publish_staged_file($stages[$definition['definition_id']]['docx'], 'docx');
             unset($stages[$definition['definition_id']]['docx']);
             $published[] = $docx['name'];

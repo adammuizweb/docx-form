@@ -1,6 +1,6 @@
 {
   "name": "docx-form",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "title": "DOCX Form",
   "description": "Publish structured document forms and safely generate reviewed or immediate DOCX output.",
   "icon": "icon.svg",
@@ -22,10 +22,10 @@
   },
   "permissions": [
     {"key":"plugin.docx-form.workspace.read","label":"View DOCX Form Workspace","supports_scope":false,"default_roles":["admin","editor"],"delegable":true},
-    {"key":"plugin.docx-form.templates.manage","label":"Manage DOCX Form Templates","supports_scope":false,"default_roles":["admin"],"delegable":false},
+    {"key":"plugin.docx-form.templates.manage","label":"Manage DOCX Form Templates","supports_scope":false,"default_roles":["admin"],"delegable":true},
     {"key":"plugin.docx-form.submissions.review","label":"Review DOCX Form Submissions","supports_scope":false,"default_roles":["admin","editor"],"delegable":true},
     {"key":"plugin.docx-form.audit.view","label":"View DOCX Form Audit Trail","supports_scope":false,"default_roles":["admin"],"delegable":true},
-    {"key":"plugin.docx-form.settings.manage","label":"Manage DOCX Form Settings","supports_scope":false,"default_roles":["admin"],"delegable":false}
+    {"key":"plugin.docx-form.settings.manage","label":"Manage DOCX Form Settings","supports_scope":false,"default_roles":["admin"],"delegable":true}
   ],
   "admin": {
     "pages": [
