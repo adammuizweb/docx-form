@@ -18,6 +18,9 @@ $validated = dxf_validate_values($descriptor, ['person.full_name'=>'Ada <One>','
 $check($validated['values']['person.full_name'] === 'Ada <One>' && $validated['identity']['email_verified'] === true, 'typed values remain plain text and verified email binds case-insensitively');
 $self = dxf_validate_values($descriptor, ['person.full_name'=>'Ada','person.email'=>'ada@example.test','choice'=>'one'], 'self_declared');
 $check($self['identity']['email_verified'] === false, 'self-declared identity is never marked verified');
+$partial = dxf_validate_values($descriptor, ['person.full_name'=>'','person.email'=>'','choice'=>''], 'email_otp', 'user@example.test', true);
+$check($partial['values'] === ['person.full_name'=>'','person.email'=>'','choice'=>''], 'preview validation permits incomplete required values while preserving descriptor order');
+$check($throws(static fn() => dxf_validate_values($descriptor, ['person.full_name'=>'','person.email'=>'wrong@example.test','choice'=>''], 'email_otp', 'user@example.test', true)), 'preview validation preserves verified email binding');
 $valuesJson=dxf_values_json($descriptor,['choice'=>'two','person.email'=>'USER@example.test','person.full_name'=>'Ada <One>']);
 $check(array_keys(json_decode($valuesJson,true,16,JSON_THROW_ON_ERROR))===['person.full_name','person.email','choice'],'value JSON follows immutable descriptor field order');
 $identityJson=dxf_identity_json(['email_verified'=>true,'email'=>'USER@example.test','name'=>'Ada']);

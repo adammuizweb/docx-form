@@ -30,6 +30,7 @@ function dxf_json(array $value): string
 function dxf_settings_defaults(): array
 {
     return [
+        'preview_mode'=>'shadow',
         'otp_expiry_minutes'=>10,'otp_max_attempts'=>5,'otp_resend_cooldown_seconds'=>60,
         'rate_window_seconds'=>3600,'rate_max_requests'=>10,'receipt_expiry_hours'=>168,
         'otp_retention_days'=>7,'pending_retention_days'=>30,'rejected_retention_days'=>30,'approved_retention_days'=>365,
@@ -48,8 +49,9 @@ function dxf_settings_from_rows(array $rows): array
         'otp_retention_days'=>[1,3650],'pending_retention_days'=>[1,3650],'rejected_retention_days'=>[1,3650],'approved_retention_days'=>[1,3650],'output_retention_days'=>[1,3650],
         'event_retention_days'=>[7,3650],'staging_retention_hours'=>[1,168],
     ];
-    $settings = [];
-    foreach ($defaults as $name => $default) $settings[$name] = dxf_bounded_int($values['dxf_'.$name] ?? $default, $bounds[$name][0], $bounds[$name][1], $default);
+    $previewMode = $values['dxf_preview_mode'] ?? null;
+    $settings = ['preview_mode'=>in_array($previewMode, ['shadow','rendered_docx'], true) ? $previewMode : $defaults['preview_mode']];
+    foreach ($bounds as $name => [$minimum,$maximum]) $settings[$name] = dxf_bounded_int($values['dxf_'.$name] ?? $defaults[$name], $minimum, $maximum, $defaults[$name]);
     return $settings;
 }
 

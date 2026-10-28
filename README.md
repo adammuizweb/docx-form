@@ -2,7 +2,7 @@
 
 DOCX Form is a generic Jyavani CMS plugin for collecting structured values and
 producing reviewed or immediate documents from validated DOCX templates.
-Version `0.3.1` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
+Version `0.4.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
 `10.6+` or MySQL `8.0.16+`, and the PHP extensions declared in `plugin.json`.
 
 ## Workflow
@@ -20,6 +20,15 @@ Version `0.3.1` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
    requires generated DOCX download to be enabled.
 5. A non-secret receipt UUID plus its scoped browser capability cookie can
    retrieve approved or ready enabled output until the configured receipt expiry.
+
+The Settings page can switch public previews between the fast descriptor-based
+shadow view and a rendered DOCX view. Rendered previews are available only for
+immediate-download templates. They generate a validated temporary DOCX from
+the current partial values, render that actual package in the browser with
+pinned local dependencies, and remove the private staging file without creating
+a submission or retained output. Email-OTP previews still require a verified
+challenge. Browser rendering is a preview; the downloaded DOCX remains the
+authoritative document for Word-compatible pagination.
 
 ## Descriptor
 
@@ -144,7 +153,7 @@ validation cannot stand in for the runtime trusted sanitizer callback.
 ```sh
 for file in $(git ls-files '*.php'); do php -l "$file"; done
 for test in tests/*.php; do php "$test"; done
-php tools/build-package.php /tmp/opencode/docx-form-0.3.1.zip
+php tools/build-package.php /tmp/opencode/docx-form-0.4.0.zip
 ```
 
 No Composer or runtime framework is required.

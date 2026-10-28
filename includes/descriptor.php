@@ -150,7 +150,7 @@ function dxf_identity_json(array $identity): string
     return json_encode($ordered, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 }
 
-function dxf_validate_values(array $descriptor, mixed $input, string $identityMode, ?string $verifiedEmail = null): array
+function dxf_validate_values(array $descriptor, mixed $input, string $identityMode, ?string $verifiedEmail = null, bool $allowIncomplete = false): array
 {
     $descriptor = dxf_descriptor_validate($descriptor);
     if (!is_array($input) || array_is_list($input) || count($input) > 100) throw new DomainException('Submitted values must be a bounded object.');
@@ -162,7 +162,7 @@ function dxf_validate_values(array $descriptor, mixed $input, string $identityMo
         if ($field['type'] === 'checkbox') {
             if (!in_array($raw, [true, false, 1, 0, '1', '0', 'on', null], true)) throw new DomainException($field['label'] . ' is invalid.');
             $value = in_array($raw, [true, 1, '1', 'on'], true) ? 'Yes' : 'No';
-            if ($field['required'] && $value !== 'Yes') throw new DomainException($field['label'] . ' is required.');
+            if (!$allowIncomplete && $field['required'] && $value !== 'Yes') throw new DomainException($field['label'] . ' is required.');
         } else {
             if (!is_string($raw) && !is_int($raw) && !is_float($raw) && $raw !== null) throw new DomainException($field['label'] . ' must be plain text.');
             $rawText = dxf_scalar($raw ?? '');
@@ -170,7 +170,7 @@ function dxf_validate_values(array $descriptor, mixed $input, string $identityMo
             if (preg_match('//u', $rawText) !== 1 || preg_match($pattern, $rawText)
                 || mb_strlen(trim($rawText), 'UTF-8') > (int)$field['max_length']) throw new DomainException($field['label'] . ' is invalid or too long.');
             $value = dxf_text($raw ?? '', (int)$field['max_length'], $field['type'] !== 'textarea');
-            if ($field['required'] && $value === '') throw new DomainException($field['label'] . ' is required.');
+            if (!$allowIncomplete && $field['required'] && $value === '') throw new DomainException($field['label'] . ' is required.');
             if ($field['type'] === 'email' && ($value !== '' && (strlen($value) > 254 || filter_var($value, FILTER_VALIDATE_EMAIL) === false || preg_match('/[\r\n]/', $value)))) throw new DomainException($field['label'] . ' is not a valid email address.');
             if ($field['type'] === 'tel' && $value !== '' && preg_match('/\A[0-9+().\- ]{3,40}\z/D', $value) !== 1) throw new DomainException($field['label'] . ' is not a valid telephone number.');
             if ($field['type'] === 'number' && $value !== '' && (!is_numeric($value) || !is_finite((float)$value))) throw new DomainException($field['label'] . ' is not a valid number.');
@@ -183,6 +183,11 @@ function dxf_validate_values(array $descriptor, mixed $input, string $identityMo
         }
         $values[$field['key']] = $value;
         if (isset($field['identity'])) $identity[$field['identity']] = $value;
+    }
+    if ($allowIncomplete) {
+        if (!in_array($identityMode, ['email_otp','self_declared'], true)) throw new DomainException('The identity mode is invalid.');
+        if ($identityMode === 'email_otp' && (!is_string($verifiedEmail) || (isset($identity['email']) && $identity['email'] !== '' && !hash_equals(strtolower($verifiedEmail), strtolower($identity['email']))))) throw new DomainException('A verified email identity is required.');
+        return ['values' => $values, 'identity' => $identity];
     }
     if ($identityMode === 'email_otp') {
         if (!isset($identity['email']) || $identity['email'] === '' || $verifiedEmail === null || !hash_equals(strtolower($verifiedEmail), strtolower($identity['email']))) {

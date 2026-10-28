@@ -104,14 +104,16 @@ function dxf_public_rate(PDO $pdo, string $action, int $multiplier = 1): void
     if (!dxf_rate_limit($pdo, $action, $settings['rate_max_requests'] * $multiplier, $settings['rate_window_seconds'])) dxf_public_error(429, dxf_t('Too many requests. Please try again later.'));
 }
 
-function dxf_public_document(string $content, string $title, string $description = ''): never
+function dxf_public_document(string $content, string $title, string $description = '', bool $renderedPreview = false): never
 {
     header('Cache-Control: no-store, private, max-age=0');
     header('Referrer-Policy: no-referrer');
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: DENY');
     header('X-Robots-Tag: noindex, nofollow');
-    header("Content-Security-Policy: default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    $stylePolicy = $renderedPreview ? "style-src 'self' 'unsafe-inline';" : "style-src 'self';";
+    $connectPolicy = $renderedPreview ? "connect-src 'self';" : "connect-src 'none';";
+    header("Content-Security-Policy: default-src 'none'; {$stylePolicy} script-src 'self'; img-src 'self' data:; font-src 'self' data:; {$connectPolicy} frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     header('Content-Type: text/html; charset=UTF-8');
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'HEAD') exit;
     $locale = function_exists('get_locale') ? str_replace('_', '-', (string)get_locale()) : 'en';
@@ -153,6 +155,9 @@ function dxf_public_form(PDO $pdo, array $template): never
     $challengeToken = dxf_capability_cookie(dxf_cookie_name('otp', (int)$template['id'])) ?? '';
     $challenge = $challengeToken !== '' ? dxf_challenge_state($pdo, (int)$template['id'], (int)$template['current_version_id'], $challengeToken) : null;
     $verified = is_array($challenge) && $challenge['verified_at_utc'] !== null;
+    $renderedPreview = dxf_settings($pdo)['preview_mode'] === 'rendered_docx'
+        && (string)$template['workflow_mode'] === 'immediate_download'
+        && (int)$template['allow_docx_download'] === 1;
     $csrf = dxf_public_csrf_token();
     $html = '<main class="dxf-shell dxf-shell--form"><a class="dxf-back" href="/document-forms/">' . dxf_h(dxf_t('All document forms')) . '</a><header class="dxf-hero"><span>' . dxf_h(dxf_t('Document form')) . '</span><h1>' . dxf_h($template['title']) . '</h1><p>' . dxf_h($template['description']) . '</p></header>';
     if ((string)$template['identity_mode'] === 'email_otp') {
@@ -168,7 +173,8 @@ function dxf_public_form(PDO $pdo, array $template): never
         $html .= '<p class="dxf-notice" role="note">' . dxf_h(dxf_t('Identity details are self-declared and are not verified.')) . '</p>';
     }
     $disabled = (string)$template['identity_mode'] === 'email_otp' && !$verified;
-    $html .= '<div class="dxf-workspace"><form class="dxf-form" method="post" action="/document-forms/' . rawurlencode((string)$template['slug']) . '/submit/" data-dxf-form data-preview-empty="' . dxf_h(dxf_t('Not provided')) . '" data-preview-updated="' . dxf_h(dxf_t('Preview updated')) . '"><input type="hidden" name="csrf_token" value="' . dxf_h($csrf) . '"><input type="hidden" name="idempotency" value="' . bin2hex(random_bytes(32)) . '"><fieldset' . ($disabled ? ' disabled' : '') . '><legend class="dxf-sr-only">' . dxf_h(dxf_t('Document details')) . '</legend>';
+    $previewAttributes = $renderedPreview ? ' data-preview-url="/document-forms/' . rawurlencode((string)$template['slug']) . '/preview/" data-preview-loading="' . dxf_h(dxf_t('Generating document preview...')) . '" data-preview-rendered="' . dxf_h(dxf_t('Document preview updated')) . '" data-preview-error="' . dxf_h(dxf_t('Rendered preview is temporarily unavailable. Showing the field summary instead.')) . '"' : '';
+    $html .= '<div class="dxf-workspace"><form class="dxf-form" method="post" action="/document-forms/' . rawurlencode((string)$template['slug']) . '/submit/" data-dxf-form data-preview-empty="' . dxf_h(dxf_t('Not provided')) . '" data-preview-updated="' . dxf_h(dxf_t('Preview updated')) . '"' . $previewAttributes . '><input type="hidden" name="csrf_token" value="' . dxf_h($csrf) . '"><input type="hidden" name="idempotency" value="' . bin2hex(random_bytes(32)) . '"><fieldset' . ($disabled ? ' disabled' : '') . '><legend class="dxf-sr-only">' . dxf_h(dxf_t('Document details')) . '</legend>';
     foreach ($descriptor['fields'] as $index => $field) {
         $id = 'dxf-field-' . $index;
         $required = $field['required'] ? ' required' : '';
@@ -198,21 +204,77 @@ function dxf_public_form(PDO $pdo, array $template): never
     }
     $immediate = (string)$template['workflow_mode'] === 'immediate_download';
     $submitLabel = $immediate ? dxf_t('Generate DOCX') : dxf_t('Submit for review');
-    $previewCopy = $immediate ? dxf_t('The final document is generated by the server immediately after submission.') : dxf_t('The final document is generated by the server after approval.');
+    $previewCopy = $renderedPreview ? dxf_t('This preview is generated from the actual DOCX template and current form values.') : ($immediate ? dxf_t('The final document is generated by the server immediately after submission.') : dxf_t('The final document is generated by the server after approval.'));
     $previewColumns = (int)$descriptor['print']['columns'];
-    $html .= '<button class="dxf-submit" type="submit">' . dxf_h($submitLabel) . '</button></fieldset></form><aside class="dxf-preview dxf-preview--columns-' . $previewColumns . '" aria-labelledby="dxf-preview-title"><span>' . dxf_h(dxf_t('Non-authoritative preview')) . '</span><p class="dxf-preview-note">' . dxf_h($previewCopy) . '</p><section class="dxf-preview-document"><header><h2 id="dxf-preview-title">' . dxf_h($descriptor['print']['title'] ?: $template['title']) . '</h2>';
+    $previewLabel = $renderedPreview ? dxf_t('Rendered DOCX preview') : dxf_t('Non-authoritative preview');
+    $html .= '<button class="dxf-submit" type="submit">' . dxf_h($submitLabel) . '</button></fieldset></form><aside class="dxf-preview dxf-preview--columns-' . $previewColumns . '" aria-labelledby="dxf-preview-label"><span id="dxf-preview-label">' . dxf_h($previewLabel) . '</span><p class="dxf-preview-note">' . dxf_h($previewCopy) . '</p><section class="dxf-preview-document" data-shadow-preview><header><h2>' . dxf_h($descriptor['print']['title'] ?: $template['title']) . '</h2>';
     if ($descriptor['print']['show_description']) $html .= '<p>' . dxf_h($template['description']) . '</p>';
     $html .= '</header><dl>';
     foreach ($descriptor['fields'] as $index => $field) $html .= '<div><dt>' . dxf_h($field['label']) . '</dt><dd data-preview-output="' . $index . '">' . dxf_h(dxf_t('Not provided')) . '</dd></div>';
-    $html .= '</dl></section><p class="dxf-preview-status" role="status" aria-live="polite" data-preview-status></p></aside></div>';
+    $html .= '</dl></section>';
+    if ($renderedPreview) $html .= '<section class="dxf-preview-rendered" data-rendered-preview aria-label="' . dxf_h(dxf_t('Rendered document')) . '" hidden></section>';
+    $html .= '<p class="dxf-preview-status" role="status" aria-live="polite" data-preview-status></p></aside></div>';
     if ($template['source_pdf_storage_name'] && ((int)$template['allow_source_view'] || (int)$template['allow_source_download'])) {
         $html .= '<nav class="dxf-source" aria-label="' . dxf_h(dxf_t('Source PDF')) . '">';
         if ((int)$template['allow_source_view'] && (int)$template['source_pdf_inline_validated'] === 1 && dxf_pdf_inline_available()) $html .= '<a href="/document-forms/' . rawurlencode((string)$template['slug']) . '/source/view/">' . dxf_h(dxf_t('View source PDF')) . '</a>';
         if ((int)$template['allow_source_download']) $html .= '<a href="/document-forms/' . rawurlencode((string)$template['slug']) . '/source/download/">' . dxf_h(dxf_t('Download source PDF')) . '</a>';
         $html .= '</nav>';
     }
+    if ($renderedPreview) $html .= '<script src="/static/plugins/docx-form/vendor/jszip.min.js?v=3.10.1" defer></script><script src="/static/plugins/docx-form/vendor/docx-preview.min.js?v=0.4.1" defer></script>';
     $html .= '<script src="/static/plugins/docx-form/preview.js?v=' . rawurlencode(DXF_VERSION) . '" defer></script></main>';
-    dxf_public_document($html, (string)$template['title'], (string)$template['description']);
+    dxf_public_document($html, (string)$template['title'], (string)$template['description'], $renderedPreview);
+}
+
+function dxf_public_preview(PDO $pdo, array $template): never
+{
+    dxf_require_public_post();
+    $settings = dxf_settings($pdo);
+    if ($settings['preview_mode'] !== 'rendered_docx' || (string)$template['workflow_mode'] !== 'immediate_download' || (int)$template['allow_docx_download'] !== 1) dxf_public_error(404, dxf_t('Page not found.'));
+    if (!dxf_rate_limit($pdo, 'preview:' . (int)$template['id'], $settings['rate_max_requests'] * 20, $settings['rate_window_seconds'])) dxf_public_error(429, dxf_t('Too many requests. Please try again later.'));
+    $verifiedEmail = null;
+    if ((string)$template['identity_mode'] === 'email_otp') {
+        $challengeToken = dxf_capability_cookie(dxf_cookie_name('otp', (int)$template['id']));
+        $challenge = $challengeToken !== null ? dxf_challenge_state($pdo, (int)$template['id'], (int)$template['current_version_id'], $challengeToken) : null;
+        if (!is_array($challenge) || $challenge['verified_at_utc'] === null) dxf_public_error(403, dxf_t('A verified email identity is required.'));
+        $verifiedEmail = (string)$challenge['email'];
+    }
+    $stage = '';
+    try {
+        $rawValues = dxf_posted_values($template['descriptor']);
+        $validated = dxf_validate_values($template['descriptor'], $rawValues, (string)$template['identity_mode'], $verifiedEmail, true);
+        $source = dxf_assert_file_integrity((string)$template['docx_storage_name'], (string)$template['docx_sha256']);
+        $stage = dxf_new_stage_path('docx');
+        register_shutdown_function(static function () use (&$stage): void { if ($stage !== '') try { dxf_discard_stage($stage); } catch (Throwable) {} });
+        $output = dxf_generate_docx($source, $template['descriptor'], $validated['values'], $stage);
+        $stream = fopen($stage, 'rb');
+        if ($stream === false) throw new RuntimeException('Preview output could not be opened.');
+        ignore_user_abort(true);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Length: ' . (string)$output['size']);
+        header('Content-Disposition: inline; filename="document-preview.docx"');
+        header('Cache-Control: no-store, private, max-age=0');
+        header('Pragma: no-cache');
+        header('Referrer-Policy: no-referrer');
+        header('X-Content-Type-Options: nosniff');
+        header('X-Robots-Tag: noindex, nofollow');
+        header("Content-Security-Policy: sandbox; default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+        while (!feof($stream)) {
+            $chunk = fread($stream, 65536);
+            if ($chunk === false) break;
+            echo $chunk;
+        }
+        fclose($stream);
+        dxf_discard_stage($stage);
+        $stage = '';
+        exit;
+    } catch (DomainException $error) {
+        if ($stage !== '') { try { dxf_discard_stage($stage); } catch (Throwable) {} $stage = ''; }
+        dxf_public_error(422, dxf_t($error->getMessage()));
+    } catch (Throwable $error) {
+        if ($stage !== '') { try { dxf_discard_stage($stage); } catch (Throwable) {} $stage = ''; }
+        error_log('[docx-form] rendered preview generation failed.');
+        dxf_public_error(503, dxf_t('Rendered document preview is temporarily unavailable.'));
+    }
 }
 
 function dxf_public_otp_request(PDO $pdo, array $template): never
@@ -535,6 +597,7 @@ function dxf_public_dispatch(PDO $pdo, ?string $routerPath = null): void
     if ($action === 'otp/request') dxf_public_otp_request($pdo, $template);
     if ($action === 'otp/verify') dxf_public_otp_verify($pdo, $template);
     if ($action === 'submit') dxf_public_submit($pdo, $template);
+    if ($action === 'preview') dxf_public_preview($pdo, $template);
     if ($action === 'source/view') dxf_public_source($pdo, $template, 'view');
     if ($action === 'source/download') dxf_public_source($pdo, $template, 'download');
     dxf_public_error(404, dxf_t('Page not found.'));

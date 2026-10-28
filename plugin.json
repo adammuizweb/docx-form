@@ -1,6 +1,6 @@
 {
   "name": "docx-form",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "title": "DOCX Form",
   "description": "Publish structured document forms and safely generate reviewed or immediate DOCX output.",
   "icon": "icon.svg",
@@ -47,6 +47,8 @@
       {"from":"assets/css/frontend.css","to":"static/plugins/docx-form/frontend.css"},
       {"from":"assets/css/widget.css","to":"static/plugins/docx-form/widget.css"},
       {"from":"assets/css/admin.css","to":"static/plugins/docx-form/admin.css"},
+      {"from":"assets/vendor/jszip.min.js","to":"static/plugins/docx-form/vendor/jszip.min.js"},
+      {"from":"assets/vendor/docx-preview.min.js","to":"static/plugins/docx-form/vendor/docx-preview.min.js"},
       {"from":"assets/js/preview.js","to":"static/plugins/docx-form/preview.js"},
       {"from":"assets/js/print.js","to":"static/plugins/docx-form/print.js"}
     ]

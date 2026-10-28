@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__, 2) . '/common.php';
+require dirname(__DIR__) . '/common.php';
 $actorId = dxf_admin_guard($pdo, DXF_PERMISSION_SETTINGS);
 dxf_admin_require_post();
 try {
@@ -10,7 +10,9 @@ try {
         'otp_retention_days'=>[1,3650],'pending_retention_days'=>[1,3650],'rejected_retention_days'=>[1,3650],'approved_retention_days'=>[1,3650],'output_retention_days'=>[1,3650],
         'event_retention_days'=>[7,3650],'staging_retention_hours'=>[1,168],
     ];
-    $next = [];
+    $previewMode = dxf_scalar($_POST['preview_mode'] ?? '');
+    if (!in_array($previewMode, ['shadow','rendered_docx'], true)) throw new DomainException(dxf_t('Choose a valid document preview mode.'));
+    $next = ['preview_mode'=>$previewMode];
     foreach ($bounds as $name => [$minimum,$maximum]) {
         $next[$name] = dxf_bounded_int($_POST[$name] ?? 0, $minimum, $maximum, 0);
         if ($next[$name] === 0) throw new DomainException(dxf_t('Enter valid bounded settings.'));

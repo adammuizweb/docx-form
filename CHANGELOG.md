@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 - 2026-10-28
+
+- Added a dashboard preview-mode toggle and ephemeral rendered-DOCX previews
+  for immediate-download forms, with partial typed validation, bounded request
+  rates, private-stage cleanup, local pinned browser dependencies, and shadow
+  fallback.
+
 ## 0.3.1 - 2026-10-28
 
 - Expanded the public form workspace into a responsive one-quarter form and
