@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-10-28
+
+- Added immutable per-revision operator-review and immediate-DOCX workflows,
+  with transactional server-side generation, a distinct `ready` status,
+  append-only events, receipt revocation, and retention parity.
+- Added backward-compatible managed import projections, retry-safe workflow
+  upgrade and verification migrations, localized UI, and release contracts.
+
 ## 0.2.0 - 2026-10-27
 
 - Added a generic, versioned batch-import API with exact source integrity,

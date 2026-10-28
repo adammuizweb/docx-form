@@ -1,8 +1,8 @@
 # DOCX Form
 
-DOCX Form is a generic Jyavani CMS plugin for collecting structured values,
-reviewing submissions, and producing approved documents from validated DOCX
-templates. Version `0.2.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
+DOCX Form is a generic Jyavani CMS plugin for collecting structured values and
+producing reviewed or immediate documents from validated DOCX templates.
+Version `0.3.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
 `10.6+` or MySQL `8.0.16+`, and the PHP extensions declared in `plugin.json`.
 
 ## Workflow
@@ -13,11 +13,13 @@ templates. Version `0.2.0` requires Jyavani `2.3.187+`, PHP `8.1+`, MariaDB
    retain their original title, description, descriptor, controls, and binary
    revision even if the current template metadata changes later.
 3. A public user submits values under either email OTP or explicitly
-   self-declared identity. New submissions enter `pending`.
-4. An operator approves or rejects the submission. Approval generates the
-   authoritative DOCX server-side when an enabled output requires it.
+   self-declared identity. `operator_review` revisions enter `pending`; an
+   operator can approve or reject them.
+4. `immediate_download` revisions generate enabled output in the submission
+   transaction and enter `ready` without review metadata. Immediate mode always
+   requires generated DOCX download to be enabled.
 5. A non-secret receipt UUID plus its scoped browser capability cookie can
-   retrieve approved enabled output until the configured receipt expiry.
+   retrieve approved or ready enabled output until the configured receipt expiry.
 
 ## Descriptor
 
@@ -96,7 +98,7 @@ Runtime files live below Core's private files tree in
 `private_files/plugins/docx-form` with random names and SHA-256 metadata. That
 directory is not packaged. Uploads and generated artifacts are bounded in a
 same-filesystem private staging directory and atomically published only after
-transaction-time authorization and row locking. Receipt and OTP capabilities
+transaction-time permission or published-template checks and row locking. Receipt and OTP capabilities
 are kept in `Secure`, `HttpOnly`, `SameSite=Strict` scoped cookies and stored
 server-side only as hashes; they never appear in URLs. Events retain UTC
 timestamps, an available actor user ID, and
@@ -105,7 +107,7 @@ HMAC-based IP/user-agent hashes; they do not retain raw network identifiers.
 Core stateless CSRF tokens with a two-hour (`7200` second) TTL, including when
 the browser also has an authenticated session. Missing stateless CSRF APIs or
 an insufficient secret produce a controlled public `503` response. Settings explicitly bound OTP
-resends, receipt lifetime, pending/rejected submissions, generated outputs,
+resends, receipt lifetime, pending/rejected/approved-or-ready submissions, generated outputs,
 events, and stale staging files. Cleanup runs in small request-time batches.
 
 Complete uninstall removes plugin tables, settings, and the validated private
@@ -114,13 +116,16 @@ preserves data while routes fail closed because the plugin is not loaded.
 
 ## Migrations
 
-Migrations are append-only and retry-safe after MySQL/MariaDB partial DDL:
-`0001-foundation.sql` creates tables, `0002-current-version-foreign-key.php`
-idempotently installs the circular current-version foreign key, and
-`0003-verify-schema.php` fails closed on incompatible columns, indexes, checks,
-JSON validity constraints, or owned foreign keys. `0004-template-import-ledger.sql`
-adds generic managed-import ownership, and `0005-verify-import-ledger.php`
-verifies that extension. No request path performs DDL.
+Migrations are append-only and retry-safe after MySQL/MariaDB partial DDL.
+Applied migrations `0001` through `0005` remain byte-for-byte immutable:
+`0001-foundation.sql` creates the baseline tables,
+`0002-current-version-foreign-key.php` installs the circular current-version
+foreign key, `0003-verify-schema.php` verifies that baseline, and `0004`/`0005`
+add and verify managed-import ownership. On both fresh and upgraded databases,
+`0006-workflow-mode.php` retry-safely adds immutable workflow modes and the
+`ready` status after the baseline migrations;
+`0007-verify-workflow-schema.php` verifies the complete upgraded schema and
+workflow invariants. No request path performs DDL.
 
 ## Managed Imports
 
@@ -129,7 +134,9 @@ fully hash-bound package. The API validates every descriptor and source file,
 plans without mutation by default, and applies under a namespace advisory lock,
 transaction-time permission check, immutable revisions, Core audit, and a
 plugin-owned ledger. It never adopts an existing unmanaged slug or overwrites
-operator changes. Imported inline PDF viewing remains disabled because offline
+operator changes. `workflow_mode` is optional and defaults to `operator_review`
+without changing import API version 1; immediate imports must enable DOCX
+download. Imported inline PDF viewing remains disabled because offline
 validation cannot stand in for the runtime trusted sanitizer callback.
 
 ## Development
@@ -137,7 +144,7 @@ validation cannot stand in for the runtime trusted sanitizer callback.
 ```sh
 for file in $(git ls-files '*.php'); do php -l "$file"; done
 for test in tests/*.php; do php "$test"; done
-php tools/build-package.php /tmp/docx-form-0.2.0.zip
+php tools/build-package.php /tmp/opencode/docx-form-0.3.0.zip
 ```
 
 No Composer or runtime framework is required.

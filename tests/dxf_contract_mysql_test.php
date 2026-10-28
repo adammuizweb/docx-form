@@ -14,7 +14,9 @@ $foreignKey = require $root . '/migrations/0002-current-version-foreign-key.php'
 $verify = require $root . '/migrations/0003-verify-schema.php';
 $importLedger = (string)file_get_contents($root . '/migrations/0004-template-import-ledger.sql');
 $verifyImport = require $root . '/migrations/0005-verify-import-ledger.php';
-if (!is_callable($foreignKey) || !is_callable($verify) || !is_callable($verifyImport)) throw new RuntimeException('Schema PHP migrations are not callable.');
+$workflow = require $root . '/migrations/0006-workflow-mode.php';
+$verifyWorkflow = require $root . '/migrations/0007-verify-workflow-schema.php';
+if (!is_callable($foreignKey) || !is_callable($verify) || !is_callable($verifyImport) || !is_callable($workflow) || !is_callable($verifyWorkflow)) throw new RuntimeException('Schema PHP migrations are not callable.');
 
 $createDatabase = static function () use ($pdo, $database): void {
     $pdo->exec('DROP DATABASE IF EXISTS `' . $database . '`');
@@ -24,16 +26,21 @@ $createDatabase = static function () use ($pdo, $database): void {
 $runFoundation = static function () use ($pdo, $foundation): void {
     foreach (preg_split('/;\s*(?:\r?\n|\z)/', $foundation, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) $pdo->exec($statement);
 };
-$runAll = static function () use ($runFoundation, $foreignKey, $verify, $importLedger, $verifyImport, $pdo): void {
+$runLegacy = static function () use ($runFoundation, $foreignKey, $verify, $importLedger, $verifyImport, $pdo): void {
     $runFoundation();
     $foreignKey($pdo);
     $verify($pdo);
     foreach (preg_split('/;\s*(?:\r?\n|\z)/', $importLedger, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) $pdo->exec($statement);
     $verifyImport($pdo);
 };
-$mustReject = static function (callable $operation, string $message) use ($verify, $pdo): void {
+$runAll = static function () use ($runLegacy, $workflow, $verifyWorkflow, $pdo): void {
+    $runLegacy();
+    $workflow($pdo);
+    $verifyWorkflow($pdo);
+};
+$mustReject = static function (callable $operation, string $message) use ($verifyWorkflow, $pdo): void {
     $operation();
-    try { $verify($pdo); }
+    try { $verifyWorkflow($pdo); }
     catch (RuntimeException) { return; }
     throw new RuntimeException($message);
 };
@@ -43,8 +50,20 @@ try {
     $runFoundation();
     $pdo->exec('DROP TABLE `dxf_rate_limits`');
     $runAll();
-    $runAll();
+    $workflow($pdo); $verifyWorkflow($pdo);
 
+    $createDatabase();
+    $runLegacy();
+    if ((int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='dxf_template_versions' AND COLUMN_NAME='workflow_mode'")->fetchColumn() !== 0) throw new RuntimeException('Legacy schema unexpectedly contains workflow_mode before migration 0006.');
+    $upgradeNow = gmdate('Y-m-d H:i:s');
+    $pdo->prepare("INSERT INTO dxf_templates (title,slug,status,identity_mode,created_by,updated_by,created_at_utc,updated_at_utc) VALUES (?,?,'draft','self_declared',1,1,?,?)")->execute(['Upgrade template','upgrade-template',$upgradeNow,$upgradeNow]);
+    $upgradeTemplateId = (int)$pdo->lastInsertId();
+    $pdo->prepare("INSERT INTO dxf_template_versions (template_id,revision,display_title,descriptor_json,descriptor_sha256,docx_storage_name,docx_sha256,docx_size,created_by,created_at_utc) VALUES (?,1,'Upgrade template','{}',?,?,?,1,1,?)")->execute([$upgradeTemplateId,hash('sha256','{}'),str_repeat('a',48).'.docx',str_repeat('b',64),$upgradeNow]);
+    $workflow($pdo); $workflow($pdo); $verifyWorkflow($pdo); $verifyWorkflow($pdo);
+    $upgraded = $pdo->query("SELECT c.COLUMN_DEFAULT,c.CHARACTER_SET_NAME,c.COLLATION_NAME,v.workflow_mode FROM information_schema.COLUMNS c JOIN dxf_template_versions v ON v.template_id={$upgradeTemplateId} WHERE c.TABLE_SCHEMA=DATABASE() AND c.TABLE_NAME='dxf_template_versions' AND c.COLUMN_NAME='workflow_mode'")->fetch();
+    if (!is_array($upgraded) || trim((string)$upgraded['COLUMN_DEFAULT'], "'") !== 'operator_review' || $upgraded['CHARACTER_SET_NAME'] !== 'ascii' || $upgraded['COLLATION_NAME'] !== 'ascii_bin' || $upgraded['workflow_mode'] !== 'operator_review') throw new RuntimeException('Legacy workflow schema and rows did not upgrade idempotently.');
+
+    $createDatabase(); $runAll();
     require_once $root . '/includes/validation.php';
     require_once $root . '/includes/descriptor.php';
     $descriptor = dxf_descriptor_validate([
@@ -63,6 +82,7 @@ try {
     $pdo->prepare('UPDATE dxf_templates SET current_version_id=? WHERE id=?')->execute([$versionId,$templateId]);
     $publicId = '123e4567-e89b-42d3-a456-426614174000';
     $pdo->prepare("INSERT INTO dxf_submissions (public_id,template_id,template_version_id,identity_mode,identity_json,identity_sha256,values_json,values_sha256,idempotency_hash,receipt_token_hash,receipt_expires_at_utc,status,created_at_utc,updated_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',?,?)")->execute([$publicId,$templateId,$versionId,'self_declared',$identityJson,hash('sha256',$identityJson),$valuesJson,hash('sha256',$valuesJson),str_repeat('c',64),str_repeat('d',64),gmdate('Y-m-d H:i:s',time()+3600),$now,$now]);
+    $pdo->exec("UPDATE dxf_submissions SET status='ready' WHERE public_id='123e4567-e89b-42d3-a456-426614174000'");
     $row = $pdo->query("SELECT v.display_title,v.display_description,v.descriptor_json,s.values_json,s.identity_json FROM dxf_submissions s JOIN dxf_template_versions v ON v.id=s.template_version_id WHERE s.public_id='123e4567-e89b-42d3-a456-426614174000'")->fetch();
     if (!is_array($row) || $row['display_title'] !== 'Immutable title' || $row['display_description'] !== 'Immutable description'
         || dxf_descriptor_json((array)json_decode((string)$row['descriptor_json'], true, 32, JSON_THROW_ON_ERROR)) !== $descriptorJson
@@ -128,7 +148,12 @@ try {
     if (($applied['changes'] ?? null) !== 0 || ($applied['actions']['example']['action'] ?? null) !== 'current'
         || (int)$pdo->query('SELECT COUNT(*) FROM dxf_templates')->fetchColumn() !== 1
         || (int)$pdo->query('SELECT COUNT(*) FROM dxf_import_ledger')->fetchColumn() !== 1
-        || count($GLOBALS['dxf_contract_audits'] ?? []) !== 1) throw new RuntimeException('Managed import did not apply and converge exactly once.');
+        || count($GLOBALS['dxf_contract_audits'] ?? []) !== 1
+        || $pdo->query("SELECT workflow_mode FROM dxf_template_versions LIMIT 1")->fetchColumn() !== 'operator_review') throw new RuntimeException('Managed import did not apply and converge exactly once.');
+    $legacyProjection = dxf_import_legacy_projection_hash(dxf_import_projection(dxf_import_prepare_package($importPackage)['templates'][0]));
+    $pdo->prepare('UPDATE dxf_import_ledger SET projection_sha256=?')->execute([$legacyProjection]);
+    $legacyPlan = dxf_import_templates($pdo, $importPackage);
+    if (($legacyPlan['actions']['example']['action'] ?? null) !== 'current') throw new RuntimeException('Legacy operator-review import projection did not remain compatible.');
     $pdo->exec("UPDATE dxf_templates SET title='Operator edit' WHERE slug='example-form'");
     try { dxf_import_templates($pdo, $importPackage); throw new RuntimeException('Managed import accepted operator drift.'); }
     catch (DomainException) {}

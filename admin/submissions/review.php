@@ -6,7 +6,8 @@ dxf_admin_require_post();
 $id = dxf_positive_id($_POST['id'] ?? 0);
 $version = dxf_bounded_int($_POST['version'] ?? 0, 1, PHP_INT_MAX, 0);
 $decision = dxf_scalar($_POST['decision'] ?? '');
-$created = $stages = [];
+$published = $stages = [];
+$commitAttempted = false;
 try {
     $reason = dxf_strict_text($_POST['reason'] ?? '', 1000, false);
     $revoke = $decision === 'revoke_receipt';
@@ -39,21 +40,9 @@ try {
         $pdo->commit();
         dxf_admin_redirect('success', dxf_t('Receipt access revoked.'), 'submissions/view', ['id'=>$id]);
     }
-    $docx = $pdf = null;
-    if ($decision === 'approve' && ((int)$candidate['allow_docx_download'] || (int)$candidate['allow_pdf'])) {
-        $source = dxf_assert_file_integrity((string)$candidate['docx_storage_name'], (string)$candidate['docx_sha256']);
-        $docxStage = dxf_new_stage_path('docx'); $stages[] = $docxStage;
-        $docxMetadata = dxf_generate_docx($source, $descriptor, $values, $docxStage);
-        if ((int)$candidate['allow_pdf']) {
-            $pdfStage = dxf_new_stage_path('pdf'); $stages[] = $pdfStage;
-            dxf_convert_pdf($docxStage, $pdfStage, ['submission_id'=>$id,'document_filename'=>$descriptor['document_filename']]);
-        }
-        if ((int)$candidate['allow_docx_download']) {
-            $docx = dxf_publish_staged_file($docxStage, 'docx') + ['replacements'=>$docxMetadata['replacements']];
-            $stages = array_diff($stages, [$docxStage]); $created[] = $docx['name'];
-        } else { dxf_discard_stage($docxStage); $stages = array_diff($stages, [$docxStage]); }
-        if (isset($pdfStage)) { $pdf = dxf_publish_staged_file($pdfStage, 'pdf'); $stages = array_diff($stages, [$pdfStage]); $created[] = $pdf['name']; }
-    }
+    $outputs = $decision === 'approve' ? dxf_generate_submission_outputs($candidate, $descriptor, $values, $id, $stages, $published) : ['docx'=>null,'pdf'=>null];
+    $docx = $outputs['docx'];
+    $pdf = $outputs['pdf'];
     $now = dxf_now_utc();
     $status = $decision === 'approve' ? 'approved' : 'rejected';
     $update = $pdo->prepare('UPDATE dxf_submissions SET status=?,review_reason=?,reviewed_by=?,reviewed_at_utc=?,output_docx_storage_name=?,output_docx_sha256=?,output_pdf_storage_name=?,output_pdf_sha256=?,output_generated_at_utc=?,version=version+1,updated_at_utc=? WHERE id=? AND version=?');
@@ -64,12 +53,13 @@ try {
     if ($docx) dxf_event($pdo,'docx_generated',(int)$row['template_id'],(int)$row['template_version_id'],$id,null,['sha256'=>$docx['sha256']],$actorId);
     if ($pdf) dxf_event($pdo,'pdf_generated',(int)$row['template_id'],(int)$row['template_version_id'],$id,null,['sha256'=>$pdf['sha256']],$actorId);
     dxf_core_audit($pdo,$actorId,'submission.'.$status,'docx-form-submission',$id,(string)$candidate['public_id'],['status'=>['from'=>'pending','to'=>$status]],['template_id'=>(int)$row['template_id']]);
+    $commitAttempted = true;
     $pdo->commit();
     dxf_admin_redirect('success', dxf_t('Submission review saved.'), 'submissions/view', ['id'=>$id]);
 } catch (Throwable $error) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    foreach ($stages as $stage) try { dxf_discard_stage($stage); } catch (Throwable) {}
-    foreach ($created as $name) try { @unlink(dxf_storage_path($name)); } catch (Throwable) {}
+    $rolledBack = false;
+    if ($pdo->inTransaction()) try { $pdo->rollBack(); $rolledBack = true; } catch (Throwable) {}
+    dxf_cleanup_generated_outputs($stages, $published, $rolledBack || !$commitAttempted);
     if (!$error instanceof DomainException) error_log('[docx-form] review failed: '.$error->getMessage());
     dxf_admin_redirect('error', $error instanceof DomainException ? $error->getMessage() : dxf_t('The review could not be saved.'), 'submissions/view', ['id'=>$id]);
 }

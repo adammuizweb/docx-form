@@ -117,6 +117,42 @@ function dxf_discard_stage(string $stage): void
     if ($real !== false && !is_link($stage) && is_file($real) && str_starts_with($real, $root . DIRECTORY_SEPARATOR)) @unlink($real);
 }
 
+function dxf_generate_submission_outputs(array $revision, array $descriptor, array $values, int $submissionId, array &$stages, array &$published): array
+{
+    $docx = $pdf = null;
+    if (!(int)$revision['allow_docx_download'] && !(int)$revision['allow_pdf']) return ['docx'=>null,'pdf'=>null];
+    $source = dxf_assert_file_integrity((string)$revision['docx_storage_name'], (string)$revision['docx_sha256']);
+    $docxStage = dxf_new_stage_path('docx');
+    $stages[] = $docxStage;
+    dxf_generate_docx($source, $descriptor, $values, $docxStage);
+    if ((int)$revision['allow_pdf']) {
+        $pdfStage = dxf_new_stage_path('pdf');
+        $stages[] = $pdfStage;
+        dxf_convert_pdf($docxStage, $pdfStage, ['submission_id'=>$submissionId,'document_filename'=>$descriptor['document_filename']]);
+    }
+    if ((int)$revision['allow_docx_download']) {
+        $docx = dxf_publish_staged_file($docxStage, 'docx');
+        $stages = array_values(array_diff($stages, [$docxStage]));
+        $published[] = $docx['name'];
+    } else {
+        dxf_discard_stage($docxStage);
+        $stages = array_values(array_diff($stages, [$docxStage]));
+    }
+    if (isset($pdfStage)) {
+        $pdf = dxf_publish_staged_file($pdfStage, 'pdf');
+        $stages = array_values(array_diff($stages, [$pdfStage]));
+        $published[] = $pdf['name'];
+    }
+    return ['docx'=>$docx,'pdf'=>$pdf];
+}
+
+function dxf_cleanup_generated_outputs(array $stages, array $published, bool $removePublished): void
+{
+    foreach ($stages as $stage) try { dxf_discard_stage($stage); } catch (Throwable) {}
+    if (!$removePublished) return;
+    foreach ($published as $name) try { @unlink(dxf_storage_path($name)); } catch (Throwable) {}
+}
+
 function dxf_validate_pdf(string $path): void
 {
     dxf_validate_pdf_envelope($path);

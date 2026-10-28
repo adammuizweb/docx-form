@@ -1,8 +1,8 @@
 {
   "name": "docx-form",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "title": "DOCX Form",
-  "description": "Publish structured document forms, review submissions, and generate approved DOCX output safely.",
+  "description": "Publish structured document forms and safely generate reviewed or immediate DOCX output.",
   "icon": "icon.svg",
   "author": "Adam Muiz",
   "author_uri": "https://jyavani.com/member/adammuiz/",

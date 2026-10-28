@@ -39,6 +39,11 @@ $definition = [
 ];
 $prepared = dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[$definition]]);
 $check(($prepared['templates'][0]['projection_sha256'] ?? '') === dxf_import_projection_hash($prepared['templates'][0]), 'managed import canonicalizes and fingerprints a complete definition');
+$check(($prepared['templates'][0]['workflow_mode'] ?? null) === 'operator_review' && (dxf_import_projection($prepared['templates'][0])['workflow_mode'] ?? null) === 'operator_review', 'legacy import definitions default to operator review in canonical projections');
+$check($throws(static function () use ($definition): void { $definition['workflow_mode'] = 'immediate_download'; $definition['allow_docx_download'] = false; dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[$definition]]); }), 'immediate imports require generated DOCX download');
+$immediate = $definition; $immediate['workflow_mode'] = 'immediate_download';
+$preparedImmediate = dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v2','predecessor_release'=>'v1','templates'=>[$immediate]]);
+$check(($preparedImmediate['templates'][0]['workflow_mode'] ?? null) === 'immediate_download' && $preparedImmediate['templates'][0]['projection_sha256'] !== $prepared['templates'][0]['projection_sha256'], 'managed projections include explicit workflow mode');
 $check($throws(static function () use ($definition): void { $definition['allow_source_view'] = true; dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[$definition]]); }), 'managed import cannot claim offline inline-PDF validation');
 $check($throws(static function () use ($definition): void { $definition['docx_sha256'] = str_repeat('0', 64); dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[$definition]]); }), 'managed import rejects source integrity drift');
 $check($throws(static function () use ($definition): void { dxf_import_prepare_package(['namespace'=>'example.forms','release'=>'v1','predecessor_release'=>null,'templates'=>[$definition,$definition]]); }), 'managed import rejects duplicate definition IDs and slugs');

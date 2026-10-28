@@ -42,4 +42,4 @@ jobs:
           DXF_CONTRACT_MYSQL_PASSWORD: root
         run: for test in tests/*.php; do php "$test"; done
       - name: Build verified package
-        run: php tools/build-package.php "$RUNNER_TEMP/docx-form-0.2.0.zip"
+        run: php tools/build-package.php "$RUNNER_TEMP/docx-form-0.3.0.zip"

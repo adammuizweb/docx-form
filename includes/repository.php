@@ -66,11 +66,12 @@ function dxf_public_template(PDO $pdo, string $slug): ?array
 {
     $slug = dxf_slug($slug);
     if ($slug === null) return null;
-    $statement = $pdo->prepare("SELECT t.id,t.slug,t.identity_mode,t.current_version_id,v.display_title AS title,v.display_description AS description,v.descriptor_json,v.descriptor_sha256,v.docx_storage_name,v.docx_sha256,v.source_pdf_storage_name,v.source_pdf_sha256,v.source_pdf_size,v.source_pdf_inline_validated,v.allow_source_view,v.allow_source_download,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_templates t JOIN dxf_template_versions v ON v.id=t.current_version_id AND v.template_id=t.id WHERE t.slug=? AND t.status='published' LIMIT 1");
+    $statement = $pdo->prepare("SELECT t.id,t.slug,t.identity_mode,t.current_version_id,v.display_title AS title,v.display_description AS description,v.workflow_mode,v.descriptor_json,v.descriptor_sha256,v.docx_storage_name,v.docx_sha256,v.source_pdf_storage_name,v.source_pdf_sha256,v.source_pdf_size,v.source_pdf_inline_validated,v.allow_source_view,v.allow_source_download,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_templates t JOIN dxf_template_versions v ON v.id=t.current_version_id AND v.template_id=t.id WHERE t.slug=? AND t.status='published' LIMIT 1");
     $statement->execute([$slug]);
     $row = $statement->fetch(PDO::FETCH_ASSOC);
     if (!is_array($row)) return null;
     try {
+        if (!in_array($row['workflow_mode'], ['operator_review','immediate_download'], true) || ($row['workflow_mode'] === 'immediate_download' && !(int)$row['allow_docx_download'])) return null;
         $descriptor = json_decode((string)$row['descriptor_json'], true, 32, JSON_THROW_ON_ERROR);
         $row['descriptor'] = dxf_descriptor_validate(is_array($descriptor) ? $descriptor : []);
         if (!hash_equals((string)$row['descriptor_sha256'], hash('sha256', dxf_descriptor_json($row['descriptor'])))) return null;
@@ -84,7 +85,7 @@ function dxf_receipt_submission(PDO $pdo, string $publicId, string $token, bool 
 {
     $token = dxf_token($token);
     if ($token === null || preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D', $publicId) !== 1) return null;
-    $statement = $pdo->prepare('SELECT s.*,v.display_title AS title,v.display_description AS description,v.descriptor_json,v.descriptor_sha256,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_submissions s JOIN dxf_template_versions v ON v.id=s.template_version_id AND v.template_id=s.template_id WHERE s.public_id=? AND s.receipt_token_hash=? AND s.receipt_revoked_at_utc IS NULL AND s.receipt_expires_at_utc>? LIMIT 1' . ($lock ? ' FOR UPDATE' : ''));
+    $statement = $pdo->prepare('SELECT s.*,v.display_title AS title,v.display_description AS description,v.workflow_mode,v.descriptor_json,v.descriptor_sha256,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_submissions s JOIN dxf_template_versions v ON v.id=s.template_version_id AND v.template_id=s.template_id WHERE s.public_id=? AND s.receipt_token_hash=? AND s.receipt_revoked_at_utc IS NULL AND s.receipt_expires_at_utc>? LIMIT 1' . ($lock ? ' FOR UPDATE' : ''));
     $statement->execute([$publicId,hash('sha256', $token),dxf_now_utc()]);
     $row = $statement->fetch(PDO::FETCH_ASSOC);
     if (!is_array($row)) return null;
@@ -120,7 +121,7 @@ function dxf_request_hashes(): array
 function dxf_event(PDO $pdo, string $event, int $templateId, int $versionId, ?int $submissionId = null, ?string $challengePublicId = null, array $metadata = [], ?int $actorId = null, ?string $dedupeScope = null): void
 {
     if (!$pdo->inTransaction()) throw new LogicException('DOCX Form event writes require a transaction.');
-    $allowed = ['otp_requested','otp_delivery_failed','otp_verified','submission_created','submission_reviewed','submission_approved','submission_rejected','receipt_revoked','docx_generated','docx_download_started','source_view_started','source_download_started','print_view_started','pdf_generated','pdf_download_started'];
+    $allowed = ['otp_requested','otp_delivery_failed','otp_verified','submission_created','submission_reviewed','submission_approved','submission_rejected','submission_ready','receipt_revoked','docx_generated','docx_download_started','source_view_started','source_download_started','print_view_started','pdf_generated','pdf_download_started'];
     if (!in_array($event, $allowed, true)) throw new InvalidArgumentException('Unknown DOCX Form event.');
     if (strlen(dxf_json($metadata)) > 4096) throw new InvalidArgumentException('Event metadata is too large.');
     [$ipHash, $uaHash] = dxf_request_hashes();
@@ -172,7 +173,7 @@ function dxf_cleanup_retention(PDO $pdo, array $settings): void
         $pdo->prepare('DELETE FROM dxf_rate_limits WHERE expires_at_utc<? LIMIT 100')->execute([dxf_now_utc()]);
         $pdo->prepare('DELETE FROM dxf_otp_challenges WHERE expires_at_utc<? LIMIT 100')->execute([gmdate('Y-m-d H:i:s', $now - (int)$settings['otp_retention_days'] * 86400)]);
         $pdo->prepare('DELETE FROM dxf_submission_events WHERE created_at_utc<? LIMIT 100')->execute([gmdate('Y-m-d H:i:s', $now - (int)$settings['event_retention_days'] * 86400)]);
-        foreach (['pending'=>'pending_retention_days','rejected'=>'rejected_retention_days','approved'=>'approved_retention_days'] as $status => $setting) {
+        foreach (['pending'=>'pending_retention_days','rejected'=>'rejected_retention_days','approved'=>'approved_retention_days','ready'=>'approved_retention_days'] as $status => $setting) {
             $query = $pdo->prepare('SELECT id,output_docx_storage_name,output_pdf_storage_name FROM dxf_submissions WHERE status=? AND updated_at_utc<? ORDER BY id LIMIT 25');
             $query->execute([$status,gmdate('Y-m-d H:i:s', $now - (int)$settings[$setting] * 86400)]);
             foreach ($query->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
@@ -190,10 +191,10 @@ function dxf_cleanup_retention(PDO $pdo, array $settings): void
             }
         }
         $cutoff = gmdate('Y-m-d H:i:s', $now - (int)$settings['output_retention_days'] * 86400);
-        $query = $pdo->prepare("SELECT id,output_docx_storage_name,output_pdf_storage_name FROM dxf_submissions WHERE status='approved' AND output_generated_at_utc<? AND (output_docx_storage_name IS NOT NULL OR output_pdf_storage_name IS NOT NULL) ORDER BY id LIMIT 25");
+        $query = $pdo->prepare("SELECT id,output_docx_storage_name,output_pdf_storage_name FROM dxf_submissions WHERE status IN ('approved','ready') AND output_generated_at_utc<? AND (output_docx_storage_name IS NOT NULL OR output_pdf_storage_name IS NOT NULL) ORDER BY id LIMIT 25");
         $query->execute([$cutoff]);
         foreach ($query->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
-            $update = $pdo->prepare("UPDATE dxf_submissions SET output_docx_storage_name=NULL,output_docx_sha256=NULL,output_pdf_storage_name=NULL,output_pdf_sha256=NULL WHERE id=? AND status='approved' AND output_generated_at_utc<?");
+            $update = $pdo->prepare("UPDATE dxf_submissions SET output_docx_storage_name=NULL,output_docx_sha256=NULL,output_pdf_storage_name=NULL,output_pdf_sha256=NULL WHERE id=? AND status IN ('approved','ready') AND output_generated_at_utc<?");
             $update->execute([(int)$row['id'],$cutoff]);
             if ($update->rowCount() === 1) foreach (['output_docx_storage_name','output_pdf_storage_name'] as $column) if (is_string($row[$column]) && $row[$column] !== '') { try { @unlink(dxf_storage_path($row[$column])); } catch (Throwable) {} }
         }

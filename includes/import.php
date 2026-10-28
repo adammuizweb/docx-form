@@ -28,7 +28,7 @@ function dxf_import_projection(array $definition): array
 {
     return [
         'title'=>$definition['title'],'slug'=>$definition['slug'],'description'=>$definition['description'],
-        'status'=>$definition['status'],'identity_mode'=>$definition['identity_mode'],
+        'status'=>$definition['status'],'identity_mode'=>$definition['identity_mode'],'workflow_mode'=>$definition['workflow_mode'],
         'descriptor_sha256'=>$definition['descriptor_sha256'],
         'docx_sha256'=>$definition['docx']['sha256'],'docx_size'=>$definition['docx']['size'],
         'source_pdf_sha256'=>$definition['source_pdf']['sha256'] ?? null,'source_pdf_size'=>$definition['source_pdf']['size'] ?? null,
@@ -46,6 +46,12 @@ function dxf_import_projection_hash(array $definition): string
     return hash('sha256', dxf_json(dxf_import_projection($definition)));
 }
 
+function dxf_import_legacy_projection_hash(array $projection): string
+{
+    unset($projection['workflow_mode']);
+    return hash('sha256', dxf_json($projection));
+}
+
 function dxf_import_prepare_package(array $package): array
 {
     if (array_diff(array_keys($package), ['namespace','release','predecessor_release','templates']) !== []) throw new DomainException('The DOCX Form import package contains unsupported properties.');
@@ -58,7 +64,7 @@ function dxf_import_prepare_package(array $package): array
 
     $prepared = [];
     $keys = $slugs = [];
-    $allowed = ['definition_id','title','slug','description','status','identity_mode','descriptor','descriptor_sha256','docx_path','docx_sha256','docx_size','source_pdf_path','source_pdf_sha256','source_pdf_size','allow_source_view','allow_source_download','allow_docx_download','allow_print','allow_pdf'];
+    $allowed = ['definition_id','title','slug','description','status','identity_mode','workflow_mode','descriptor','descriptor_sha256','docx_path','docx_sha256','docx_size','source_pdf_path','source_pdf_sha256','source_pdf_size','allow_source_view','allow_source_download','allow_docx_download','allow_print','allow_pdf'];
     foreach ($templates as $input) {
         if (!is_array($input) || array_is_list($input) || array_diff(array_keys($input), $allowed) !== []) throw new DomainException('A DOCX Form import definition contains unsupported properties.');
         $definitionId = dxf_import_identifier($input['definition_id'] ?? null, 'definition ID');
@@ -67,11 +73,14 @@ function dxf_import_prepare_package(array $package): array
         $description = dxf_strict_text($input['description'] ?? '', 2000, false);
         $status = $input['status'] ?? null;
         $identity = $input['identity_mode'] ?? null;
+        $workflow = $input['workflow_mode'] ?? 'operator_review';
         if ($title === '' || $slug === null || isset($keys[$definitionId]) || isset($slugs[$slug])
-            || !in_array($status, ['draft','published','archived'], true) || !in_array($identity, ['email_otp','self_declared'], true)) {
+            || !in_array($status, ['draft','published','archived'], true) || !in_array($identity, ['email_otp','self_declared'], true)
+            || !in_array($workflow, ['operator_review','immediate_download'], true)) {
             throw new DomainException('A DOCX Form import definition has invalid identity or metadata.');
         }
         foreach (['allow_source_view','allow_source_download','allow_docx_download','allow_print','allow_pdf'] as $toggle) if (!is_bool($input[$toggle] ?? null)) throw new DomainException('DOCX Form import capability flags must be booleans.');
+        if ($workflow === 'immediate_download' && !($input['allow_docx_download'] ?? false)) throw new DomainException('Immediate DOCX Form imports must enable DOCX downloads.');
         if (!is_array($input['descriptor'] ?? null)) throw new DomainException('A DOCX Form import descriptor is unavailable.');
         $descriptor = dxf_descriptor_validate($input['descriptor']);
         $descriptorJson = dxf_descriptor_json($descriptor);
@@ -97,7 +106,7 @@ function dxf_import_prepare_package(array $package): array
 
         $definition = [
             'definition_id'=>$definitionId,'title'=>$title,'slug'=>$slug,'description'=>$description,
-            'status'=>$status,'identity_mode'=>$identity,'descriptor'=>$descriptor,'descriptor_json'=>$descriptorJson,'descriptor_sha256'=>$descriptorHash,
+            'status'=>$status,'identity_mode'=>$identity,'workflow_mode'=>$workflow,'descriptor'=>$descriptor,'descriptor_json'=>$descriptorJson,'descriptor_sha256'=>$descriptorHash,
             'docx'=>$docx,'source_pdf'=>$pdf,
             'allow_source_view'=>$input['allow_source_view'],'allow_source_download'=>$input['allow_source_download'],
             'allow_docx_download'=>$input['allow_docx_download'],'allow_print'=>$input['allow_print'],'allow_pdf'=>$input['allow_pdf'],
@@ -115,7 +124,7 @@ function dxf_import_row_projection(array $row): array
 {
     return [
         'title'=>(string)$row['title'],'slug'=>(string)$row['slug'],'description'=>(string)($row['description'] ?? ''),
-        'status'=>(string)$row['status'],'identity_mode'=>(string)$row['identity_mode'],
+        'status'=>(string)$row['status'],'identity_mode'=>(string)$row['identity_mode'],'workflow_mode'=>(string)$row['workflow_mode'],
         'descriptor_sha256'=>(string)$row['descriptor_sha256'],
         'docx_sha256'=>(string)$row['docx_sha256'],'docx_size'=>(int)$row['docx_size'],
         'source_pdf_sha256'=>$row['source_pdf_sha256'] === null ? null : (string)$row['source_pdf_sha256'],
@@ -151,13 +160,16 @@ function dxf_import_plan_prepared(PDO $pdo, array $package, bool $lock = false):
         $templateId = (int)$managed['template_id'];
         $versionId = (int)$managed['template_version_id'];
         if ($slugId !== $templateId) throw new DomainException('A managed DOCX Form slug or ledger reference drifted: ' . $definition['slug']);
-        $query = $pdo->prepare('SELECT t.*,v.display_title AS version_title,v.display_description AS version_description,v.descriptor_sha256,v.docx_storage_name,v.docx_sha256,v.docx_size,v.source_pdf_storage_name,v.source_pdf_sha256,v.source_pdf_size,v.source_pdf_inline_validated,v.allow_source_view,v.allow_source_download,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_templates t JOIN dxf_template_versions v ON v.id=t.current_version_id AND v.template_id=t.id WHERE t.id=? LIMIT 1' . $suffix);
+        $query = $pdo->prepare('SELECT t.*,v.display_title AS version_title,v.display_description AS version_description,v.workflow_mode,v.descriptor_sha256,v.docx_storage_name,v.docx_sha256,v.docx_size,v.source_pdf_storage_name,v.source_pdf_sha256,v.source_pdf_size,v.source_pdf_inline_validated,v.allow_source_view,v.allow_source_download,v.allow_docx_download,v.allow_print,v.allow_pdf FROM dxf_templates t JOIN dxf_template_versions v ON v.id=t.current_version_id AND v.template_id=t.id WHERE t.id=? LIMIT 1' . $suffix);
         $query->execute([$templateId]);
         $row = $query->fetch(PDO::FETCH_ASSOC);
         if (!is_array($row) || (int)$row['current_version_id'] !== $versionId) throw new DomainException('A managed DOCX Form current revision drifted: ' . $definition['slug']);
         if ((string)$row['title'] !== (string)$row['version_title'] || (string)($row['description'] ?? '') !== (string)($row['version_description'] ?? '')) throw new DomainException('A managed DOCX Form mutable metadata drifted from its current revision: ' . $definition['slug']);
-        $currentProjection = hash('sha256', dxf_json(dxf_import_row_projection($row)));
-        if (!hash_equals((string)$managed['projection_sha256'], $currentProjection)) throw new DomainException('A managed DOCX Form projection drifted: ' . $definition['slug']);
+        $rowProjection = dxf_import_row_projection($row);
+        $currentProjection = hash('sha256', dxf_json($rowProjection));
+        $legacyCurrentProjection = dxf_import_legacy_projection_hash($rowProjection);
+        if (!hash_equals((string)$managed['projection_sha256'], $currentProjection)
+            && ((string)$row['workflow_mode'] !== 'operator_review' || !hash_equals((string)$managed['projection_sha256'], $legacyCurrentProjection))) throw new DomainException('A managed DOCX Form projection drifted: ' . $definition['slug']);
         $docxPath = dxf_storage_path((string)$row['docx_storage_name']);
         if ((int)filesize($docxPath) !== (int)$row['docx_size'] || !hash_equals((string)$row['docx_sha256'], (string)hash_file('sha256', $docxPath))) throw new DomainException('A managed DOCX Form DOCX file drifted: ' . $definition['slug']);
         if ($row['source_pdf_storage_name'] !== null) {
@@ -165,7 +177,9 @@ function dxf_import_plan_prepared(PDO $pdo, array $package, bool $lock = false):
             if ((int)filesize($pdfPath) !== (int)$row['source_pdf_size'] || !hash_equals((string)$row['source_pdf_sha256'], (string)hash_file('sha256', $pdfPath))) throw new DomainException('A managed DOCX Form PDF file drifted: ' . $definition['slug']);
         } elseif ($row['source_pdf_sha256'] !== null || $row['source_pdf_size'] !== null) throw new DomainException('A managed DOCX Form PDF record is incomplete: ' . $definition['slug']);
         if (hash_equals((string)$managed['release_id'], $package['release'])) {
-            if (!hash_equals((string)$managed['projection_sha256'], $definition['projection_sha256'])) throw new DomainException('A DOCX Form import release was changed without a new release ID: ' . $definition['definition_id']);
+            $legacyDefinitionProjection = dxf_import_legacy_projection_hash(dxf_import_projection($definition));
+            if (!hash_equals((string)$managed['projection_sha256'], $definition['projection_sha256'])
+                && ($definition['workflow_mode'] !== 'operator_review' || !hash_equals((string)$managed['projection_sha256'], $legacyDefinitionProjection))) throw new DomainException('A DOCX Form import release was changed without a new release ID: ' . $definition['definition_id']);
             $action = 'current';
         } else {
             if ($package['predecessor_release'] === null || !hash_equals((string)$managed['release_id'], $package['predecessor_release'])) throw new DomainException('A DOCX Form import predecessor does not match managed state: ' . $definition['definition_id']);
@@ -227,8 +241,8 @@ function dxf_import_templates(PDO $pdo, array $package, int $actorId = 0, bool $
                 $revision = ($revisions === [] ? 0 : max($revisions)) + 1;
                 $pdo->prepare('UPDATE dxf_templates SET title=?,slug=?,description=?,status=?,identity_mode=?,version=version+1,updated_by=?,updated_at_utc=? WHERE id=?')->execute([$definition['title'],$definition['slug'],$definition['description'] ?: null,$definition['status'],$definition['identity_mode'],$actorId,$now,$templateId]);
             }
-            $insert = $pdo->prepare('INSERT INTO dxf_template_versions (template_id,revision,display_title,display_description,descriptor_json,descriptor_sha256,docx_storage_name,docx_sha256,docx_size,source_pdf_storage_name,source_pdf_sha256,source_pdf_size,source_pdf_inline_validated,allow_source_view,allow_source_download,allow_docx_download,allow_print,allow_pdf,created_by,created_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)');
-            $insert->execute([$templateId,$revision,$definition['title'],$definition['description'] ?: null,$definition['descriptor_json'],$definition['descriptor_sha256'],$docx['name'],$docx['sha256'],$docx['size'],$pdf['name'] ?? null,$pdf['sha256'] ?? null,$pdf['size'] ?? null,0,$definition['allow_source_download'] ? 1 : 0,$definition['allow_docx_download'] ? 1 : 0,$definition['allow_print'] ? 1 : 0,$definition['allow_pdf'] ? 1 : 0,$actorId,$now]);
+            $insert = $pdo->prepare('INSERT INTO dxf_template_versions (template_id,revision,display_title,display_description,workflow_mode,descriptor_json,descriptor_sha256,docx_storage_name,docx_sha256,docx_size,source_pdf_storage_name,source_pdf_sha256,source_pdf_size,source_pdf_inline_validated,allow_source_view,allow_source_download,allow_docx_download,allow_print,allow_pdf,created_by,created_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)');
+            $insert->execute([$templateId,$revision,$definition['title'],$definition['description'] ?: null,$definition['workflow_mode'],$definition['descriptor_json'],$definition['descriptor_sha256'],$docx['name'],$docx['sha256'],$docx['size'],$pdf['name'] ?? null,$pdf['sha256'] ?? null,$pdf['size'] ?? null,0,$definition['allow_source_download'] ? 1 : 0,$definition['allow_docx_download'] ? 1 : 0,$definition['allow_print'] ? 1 : 0,$definition['allow_pdf'] ? 1 : 0,$actorId,$now]);
             $versionId = (int)$pdo->lastInsertId();
             $pdo->prepare('UPDATE dxf_templates SET current_version_id=? WHERE id=?')->execute([$versionId,$templateId]);
             if ($item['action'] === 'create') {

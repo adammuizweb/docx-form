@@ -12,7 +12,8 @@ try {
     $description = dxf_strict_text($_POST['description'] ?? '', 2000, false);
     $status = dxf_scalar($_POST['status'] ?? '');
     $identityMode = dxf_scalar($_POST['identity_mode'] ?? '');
-    if ($title === '' || $slug === null || !in_array($status, ['draft','published','archived'], true) || !in_array($identityMode, ['email_otp','self_declared'], true)) throw new DomainException(dxf_t('Enter valid template details.'));
+    $workflowMode = dxf_scalar($_POST['workflow_mode'] ?? 'operator_review');
+    if ($title === '' || $slug === null || !in_array($status, ['draft','published','archived'], true) || !in_array($identityMode, ['email_otp','self_declared'], true) || !in_array($workflowMode, ['operator_review','immediate_download'], true)) throw new DomainException(dxf_t('Enter valid template details.'));
     $descriptor = dxf_descriptor_decode(dxf_scalar($_POST['descriptor_json'] ?? ''));
     $bindings = [];
     foreach ($descriptor['fields'] as $field) if (isset($field['identity'])) $bindings[$field['identity']] = true;
@@ -36,6 +37,7 @@ try {
     $removePdf = dxf_bool($_POST['remove_source_pdf'] ?? 0) === 1;
     $toggles = [];
     foreach (['allow_source_view','allow_source_download','allow_docx_download','allow_print','allow_pdf'] as $key) $toggles[$key] = dxf_bool($_POST[$key] ?? 0);
+    if ($workflowMode === 'immediate_download' && !$toggles['allow_docx_download']) throw new DomainException(dxf_t('Immediate download requires generated DOCX downloads to be enabled.'));
     if ($status === 'published' && $toggles['allow_pdf'] && !dxf_pdf_converter_available()) throw new DomainException(dxf_t('Register a trusted PDF converter before publishing a template with PDF output.'));
     $hasPdf = $pdfUpload !== null || (!$removePdf && is_array($current) && $current['source_pdf_storage_name']);
     if (!$hasPdf && ($toggles['allow_source_view'] || $toggles['allow_source_download'])) throw new DomainException(dxf_t('Source PDF controls require an uploaded PDF.'));
@@ -82,11 +84,11 @@ try {
         $pdf = $current['source_pdf_storage_name'] ? ['name'=>$current['source_pdf_storage_name'],'sha256'=>$current['source_pdf_sha256'],'size'=>(int)$current['source_pdf_size']] : null;
         if ($pdf !== null) { $pdfPath = dxf_storage_path($pdf['name']); dxf_validate_pdf($pdfPath); if (!hash_equals((string)$pdf['sha256'], hash_file('sha256', $pdfPath))) throw new RuntimeException('Stored source PDF integrity check failed.'); }
     }
-    $insert = $pdo->prepare('INSERT INTO dxf_template_versions (template_id,revision,display_title,display_description,descriptor_json,descriptor_sha256,docx_storage_name,docx_sha256,docx_size,source_pdf_storage_name,source_pdf_sha256,source_pdf_size,source_pdf_inline_validated,allow_source_view,allow_source_download,allow_docx_download,allow_print,allow_pdf,created_by,created_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-    $insert->execute([$id,$revision,$title,$description ?: null,$descriptorJson,hash('sha256',$descriptorJson),$docx['name'],$docx['sha256'],$docx['size'],$pdf['name'] ?? null,$pdf['sha256'] ?? null,$pdf['size'] ?? null,$pdf !== null && $inlineValidated ? 1 : 0,$toggles['allow_source_view'],$toggles['allow_source_download'],$toggles['allow_docx_download'],$toggles['allow_print'],$toggles['allow_pdf'],$actorId,$now]);
+    $insert = $pdo->prepare('INSERT INTO dxf_template_versions (template_id,revision,display_title,display_description,workflow_mode,descriptor_json,descriptor_sha256,docx_storage_name,docx_sha256,docx_size,source_pdf_storage_name,source_pdf_sha256,source_pdf_size,source_pdf_inline_validated,allow_source_view,allow_source_download,allow_docx_download,allow_print,allow_pdf,created_by,created_at_utc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    $insert->execute([$id,$revision,$title,$description ?: null,$workflowMode,$descriptorJson,hash('sha256',$descriptorJson),$docx['name'],$docx['sha256'],$docx['size'],$pdf['name'] ?? null,$pdf['sha256'] ?? null,$pdf['size'] ?? null,$pdf !== null && $inlineValidated ? 1 : 0,$toggles['allow_source_view'],$toggles['allow_source_download'],$toggles['allow_docx_download'],$toggles['allow_print'],$toggles['allow_pdf'],$actorId,$now]);
     $versionId = (int)$pdo->lastInsertId();
     $pdo->prepare('UPDATE dxf_templates SET current_version_id=? WHERE id=?')->execute([$versionId,$id]);
-    dxf_core_audit($pdo,$actorId,$before === null ? 'template.created' : 'template.revised','docx-form-template',$id,$title,['before'=>$before,'after'=>['status'=>$status,'version'=>$version+1,'revision'=>$revision]],['descriptor_sha256'=>hash('sha256',$descriptorJson),'docx_sha256'=>$docx['sha256'],'source_pdf_sha256'=>$pdf['sha256'] ?? null]);
+    dxf_core_audit($pdo,$actorId,$before === null ? 'template.created' : 'template.revised','docx-form-template',$id,$title,['before'=>$before,'after'=>['status'=>$status,'version'=>$version+1,'revision'=>$revision,'workflow_mode'=>$workflowMode]],['descriptor_sha256'=>hash('sha256',$descriptorJson),'docx_sha256'=>$docx['sha256'],'source_pdf_sha256'=>$pdf['sha256'] ?? null]);
     $pdo->commit();
     dxf_admin_redirect('success', dxf_t('Template revision saved.'), 'templates/edit', ['id'=>$id]);
 } catch (Throwable $error) {
